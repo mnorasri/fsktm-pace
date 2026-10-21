@@ -1,0 +1,277 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../../resources/views/**/*.blade.php';
+
+@theme {
+    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+
+    --color-brand-50: oklch(0.97 0.02 285);
+    --color-brand-100: oklch(0.93 0.04 285);
+    --color-brand-200: oklch(0.88 0.07 285);
+    --color-brand-300: oklch(0.81 0.11 285);
+    --color-brand-400: oklch(0.71 0.16 285);
+    --color-brand-500: oklch(0.62 0.2 285);
+    --color-brand-600: oklch(0.54 0.22 285);
+    --color-brand-700: oklch(0.46 0.2 285);
+    --color-brand-800: oklch(0.4 0.16 285);
+    --color-brand-900: oklch(0.35 0.13 285);
+}
+
+@layer base {
+    :root {
+        /* Keep native form controls light to match the app theme,
+           regardless of the operating system appearance setting. */
+        color-scheme: light;
+    }
+
+    [x-cloak] {
+        display: none !important;
+    }
+
+    .print-only {
+        display: none;
+    }
+}
+
+@layer components {
+    /* Buttons -------------------------------------------------------- */
+    .btn,
+    .btn-primary,
+    .btn-dark,
+    .btn-ghost,
+    .btn-subtle,
+    .btn-danger,
+    .btn-success {
+        @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition
+            focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2
+            disabled:cursor-not-allowed disabled:opacity-50;
+    }
+
+    .btn-primary {
+        @apply bg-brand-600 text-white shadow-sm shadow-brand-600/30 hover:bg-brand-700;
+    }
+
+    .btn-dark {
+        @apply bg-slate-900 text-white hover:bg-slate-800;
+    }
+
+    .btn-ghost {
+        @apply border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50;
+    }
+
+    .btn-subtle {
+        @apply bg-brand-50 text-brand-700 hover:bg-brand-100;
+    }
+
+    .btn-danger {
+        @apply bg-rose-600 text-white hover:bg-rose-700;
+    }
+
+    .btn-success {
+        @apply bg-emerald-600 text-white hover:bg-emerald-700;
+    }
+
+    .btn-sm {
+        @apply rounded-lg px-3 py-1.5 text-xs;
+    }
+
+    /* Forms ---------------------------------------------------------- */
+    .label {
+        @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500;
+    }
+
+    .input,
+    .select {
+        @apply block w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800
+            transition placeholder:text-slate-400 focus:border-brand-400 focus:outline-none
+            focus:ring-2 focus:ring-brand-100;
+    }
+
+    .select {
+        @apply appearance-none pr-9;
+        -webkit-appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+        background-position: right 0.75rem center;
+        background-repeat: no-repeat;
+        background-size: 14px;
+    }
+
+    .checkbox {
+        @apply size-4 rounded border-slate-300 text-brand-600 focus:ring-brand-400;
+    }
+
+    /* Surfaces ------------------------------------------------------- */
+    .card {
+        @apply rounded-3xl border border-slate-200/70 bg-white shadow-sm shadow-slate-200/40;
+    }
+
+    .card-pad {
+        @apply p-6;
+    }
+
+    .card-header {
+        @apply flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-5;
+    }
+
+    .glass {
+        @apply border border-white/60 bg-white/70 backdrop-blur-xl;
+    }
+
+    /* Badges --------------------------------------------------------- */
+    .badge,
+    .badge-slate,
+    .badge-brand,
+    .badge-emerald,
+    .badge-amber,
+    .badge-rose,
+    .badge-sky {
+        @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold;
+    }
+
+    .badge-slate {
+        @apply bg-slate-100 text-slate-600;
+    }
+
+    .badge-brand {
+        @apply bg-brand-100 text-brand-700;
+    }
+
+    .badge-emerald {
+        @apply bg-emerald-100 text-emerald-700;
+    }
+
+    .badge-amber {
+        @apply bg-amber-100 text-amber-700;
+    }
+
+    .badge-rose {
+        @apply bg-rose-100 text-rose-700;
+    }
+
+    .badge-sky {
+        @apply bg-sky-100 text-sky-700;
+    }
+
+    /* Navigation ----------------------------------------------------- */
+    .nav-link {
+        @apply flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-slate-600 transition
+            hover:bg-brand-50 hover:text-brand-700;
+    }
+
+    .nav-link-active {
+        @apply bg-brand-600 text-white shadow-sm shadow-brand-600/30 hover:bg-brand-600 hover:text-white;
+    }
+
+    .nav-group-label {
+        @apply px-3.5 pb-1 pt-4 text-[10px] font-bold uppercase tracking-widest text-slate-400;
+    }
+
+    /* Tables --------------------------------------------------------- */
+    .data-table {
+        @apply w-full border-separate border-spacing-0 text-left text-sm;
+    }
+
+    .data-table thead th {
+        @apply sticky top-0 z-10 border-b border-slate-200 bg-slate-50/90 px-4 py-3 text-[11px]
+            font-bold uppercase tracking-wider text-slate-500 backdrop-blur;
+    }
+
+    .data-table tbody td {
+        @apply border-b border-slate-100 px-4 py-3 align-middle text-slate-700;
+    }
+
+    .data-table tbody tr:hover td {
+        @apply bg-slate-50/70;
+    }
+
+    /* Toasts --------------------------------------------------------- */
+    .toast {
+        @apply pointer-events-auto flex w-full items-start gap-3 rounded-2xl border bg-white/95 p-4 shadow-lg
+            shadow-slate-900/10 backdrop-blur transition;
+    }
+}
+
+@layer utilities {
+    .scroll-thin {
+        scrollbar-width: thin;
+        scrollbar-color: rgb(203 213 225) transparent;
+    }
+
+    .scroll-thin::-webkit-scrollbar {
+        height: 8px;
+        width: 8px;
+    }
+
+    .scroll-thin::-webkit-scrollbar-thumb {
+        border-radius: 9999px;
+        background: rgb(203 213 225);
+    }
+
+    /*
+     * Entrance animation for cards and toasts.
+     *
+     * Two deliberate choices so content can never be hidden by the effect:
+     *  - no `animation-fill-mode: both`, so an environment that never runs the
+     *    animation falls back to the element's natural state;
+     *  - the keyframes only move the element, they never animate `opacity`,
+     *    because an engine that freezes animations mid-flight would otherwise
+     *    leave the card permanently semi-transparent.
+     */
+    .animate-rise {
+        animation: rise 0.28s ease-out;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .animate-rise {
+            animation: none;
+        }
+    }
+
+    @keyframes rise {
+        from {
+            transform: translateY(8px);
+        }
+        to {
+            transform: translateY(0);
+        }
+    }
+}
+
+/* -------------------------------------------------------------------
+   Print media — printable slips and departmental reports
+   ------------------------------------------------------------------- */
+@media print {
+    .no-print {
+        display: none !important;
+    }
+
+    .print-only {
+        display: block !important;
+    }
+
+    body {
+        background: #fff !important;
+    }
+
+    .print-container {
+        box-shadow: none !important;
+        border: none !important;
+        border-radius: 0 !important;
+        padding: 0 !important;
+    }
+
+    .print-break {
+        break-inside: avoid;
+    }
+
+    a[href]::after {
+        content: '';
+    }
+
+    @page {
+        margin: 14mm;
+    }
+}
