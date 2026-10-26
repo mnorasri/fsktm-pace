@@ -26,4 +26,27 @@ class PlanCourse extends Model
     {
         return filled($this->placeholder_key);
     }
+
+    /**
+     * The curriculum semester this row sits in, as the single number Study Plan
+     * Details uses. Odd semesters are Semester 1 of the year, even ones are
+     * Semester 2; the short special semester is reported as its year's odd
+     * semester (the view flags it separately).
+     */
+    public function curriculumSemester(): ?int
+    {
+        if ($this->year === null || $this->semester === null) {
+            return null;
+        }
+
+        return ((int) $this->year - 1) * 2 + ((int) $this->semester === 2 ? 2 : 1);
+    }
+
+    /**
+     * True when the row was placed in the short special semester.
+     */
+    public function isSpecialSemester(): bool
+    {
+        return (int) $this->semester === 3;
+    }
 }

@@ -50,10 +50,10 @@ class HodOfferingController extends Controller
             ->when($request->filled('search'), function ($q) use ($request) {
                 $term = '%'.$request->string('search').'%';
                 $q->where(fn ($inner) => $inner
-                    ->whereHas('course', fn ($c) => $c->where('code', 'like', $term)->orWhere('name', 'like', $term)));
+                    ->whereHas('course', fn ($c) => $c->where('course_code', 'like', $term)->orWhere('course_name_en', 'like', $term)));
             })
             // Course groups are the course-code prefixes, e.g. "BIC".
-            ->when($courseGroup, fn ($q) => $q->whereHas('course', fn ($c) => $c->where('code', 'like', $courseGroup.'%')))
+            ->when($courseGroup, fn ($q) => $q->whereHas('course', fn ($c) => $c->where('course_code', 'like', $courseGroup.'%')))
             ->get();
 
         $groups = $offerings
@@ -67,7 +67,7 @@ class HodOfferingController extends Controller
                 ->where('session', $session)
                 ->where('semester', $semester)
                 ->select('course_id'))
-            ->pluck('code')
+            ->pluck('course_code')
             ->map(fn (?string $code) => $this->courseGroup($code))
             ->unique()
             ->sort()
@@ -81,7 +81,7 @@ class HodOfferingController extends Controller
             ->get()
             ->groupBy('offering_id')
             ->map(fn ($rows) => $rows
-                ->groupBy(fn (PreRegistration $registration) => $registration->student?->advisor_id ?? 0)
+                ->groupBy(fn (PreRegistration $registration) => $registration->student?->advisor?->id ?? 0)
                 ->map(fn ($group) => [
                     'advisor' => $group->first()->student?->advisor,
                     'students' => $group->count(),
@@ -187,11 +187,42 @@ class HodOfferingController extends Controller
         $plans = CoursePlan::query()
             ->with([
                 'program',
-                'courses' => fn ($q) => $q->with('courseType')->orderBy('semester')->orderBy('code'),
+                'courses' => fn ($q) => $q->with('courseType')->orderBy('semester')->orderBy('course_code'),
+                'planCourses.course.courseType',
             ])
             ->when($selectedPlan, fn ($q) => $q->whereKey($selectedPlan))
             ->orderBy('code')
             ->get();
+
+        // A plan's courses come from two sources: those attached to it through
+        // their course_plan_id, and those placed on it in the study plan grid
+        // (plan_courses). Union them so every course related to the plan shows
+        // up here, even when it was only added through the study plan. Placement
+        // (year + semester) is taken from plan_courses, not from the course's
+        // own curriculum semester.
+        foreach ($plans as $plan) {
+            $map = $plan->planCourses->keyBy('course_id');
+
+            $attached = $plan->courses;
+            $fromPlan = $plan->planCourses
+                ->map(fn ($row) => $row->course)
+                ->filter()
+                ->unique('id')
+                ->reject(fn ($course) => $attached->contains('id', $course->id));
+
+            $merged = $attached
+                ->concat($fromPlan)
+                ->sortBy('course_code')
+                ->values();
+
+            foreach ($merged as $course) {
+                $row = $map->get($course->id);
+                $course->plan_year = $row?->year;
+                $course->plan_semester = $row?->semester;
+            }
+
+            $plan->setRelation('courses', $merged);
+        }
 
         $existing = Offering::where('session', $session)
             ->where('semester', $semester)

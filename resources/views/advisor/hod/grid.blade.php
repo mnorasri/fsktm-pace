@@ -14,8 +14,8 @@
     </x-page-header>
 
     <p class="no-print mb-5 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
-        Each plan is listed <span class="font-semibold text-slate-600">year by year</span>, the odd semester
-        (1, 3, 5, 7) beside the even one (2, 4, 6, 8).
+        Each plan is listed <span class="font-semibold text-slate-600">year by year</span>, following the
+        study plan's own year and semester (from Study Plan Details).
         <span class="font-semibold text-slate-600">Elective courses</span> belong to no single year — they sit in
         their own panel at the bottom of the plan. Toggle a course to add or remove it from the active term's
         offerings — published courses appear highlighted.
@@ -49,14 +49,16 @@
     <div class="space-y-6">
         @forelse ($withCourses as $plan)
             @php
-                // A course with a real semester (1, 2, 3 …) has a fixed place in the
-                // curriculum grid; everything else — the "Elective Course" (CT07)
-                // catalogue, whose semester reads as 0 — is offered without a year
-                // and picked by the student.
-                $hasSemester = fn ($course) => (int) $course->semester >= 1;
-                $scheduled = $plan->courses->filter($hasSemester)->values();
-                $electives = $plan->courses->reject($hasSemester)->values();
-                $maxYear = (int) $scheduled->max(fn ($course) => (int) ceil((int) $course->semester / 2));
+                // Placement (year + semester) comes from the study plan (plan_courses),
+                // not from the course's own curriculum semester.
+                $placed = $plan->courses->filter(fn ($course) => $course->plan_year !== null && $course->plan_semester !== null)->values();
+                $unplaced = $plan->courses->reject(fn ($course) => $course->plan_year !== null && $course->plan_semester !== null)->values();
+                $electives = $unplaced->filter(fn ($course) => (int) $course->semester === 0 || (int) $course->semester >= 11)->values();
+                $withoutTerm = $unplaced->reject(fn ($course) => (int) $course->semester === 0 || (int) $course->semester >= 11)->values();
+                $maxYear = (int) ($placed->max('plan_year') ?? 0);
+                if ($maxYear < 1) { $maxYear = 1; }
+                $hasSpecial = $placed->contains(fn ($course) => (int) $course->plan_semester === 3);
+                $semesters = $hasSpecial ? [1, 2, 3] : [1, 2];
                 $offeredCount = $plan->courses->filter(fn ($course) => isset($existing[$course->id]))->count();
             @endphp
 
@@ -72,9 +74,7 @@
                 <div class="space-y-5">
                     @foreach ($maxYear > 0 ? range(1, $maxYear) : [] as $year)
                         @php
-                            $odd = $scheduled->filter(fn ($course) => (int) $course->semester === ($year * 2) - 1)->values();
-                            $even = $scheduled->filter(fn ($course) => (int) $course->semester === $year * 2)->values();
-                            $yearCourses = $odd->concat($even);
+                            $yearCourses = $placed->filter(fn ($course) => (int) $course->plan_year === $year)->values();
                         @endphp
 
                         @if ($yearCourses->isNotEmpty())
@@ -87,17 +87,26 @@
                                     </span>
                                 </div>
 
-                                <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                                    @foreach ([$year * 2 - 1 => $odd, $year * 2 => $even] as $semesterNumber => $semesterCourses)
+                                <div class="grid grid-cols-1 gap-4 {{ count($semesters) === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2' }}">
+                                    @foreach ($semesters as $semester)
+                                        @php
+                                            $semesterCourses = $placed->filter(fn ($course) => (int) $course->plan_year === $year && (int) $course->plan_semester === $semester)->values();
+                                        @endphp
                                         <div class="rounded-2xl border border-slate-200 p-3.5">
                                             <div class="mb-3 flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
                                                 <div>
-                                                    <p class="text-sm font-semibold text-slate-700">Semester {{ $semesterNumber }}</p>
+                                                    <p class="text-sm font-semibold text-slate-700">Semester {{ $semester }}</p>
                                                     <p class="text-xs text-slate-400">
-                                                        {{ (int) $semesterNumber % 2 === 1 ? 'Odd semester' : 'Even semester' }}
+                                                        @if ($semester === 3)
+                                                            Short semester
+                                                        @elseif ($semester === 1)
+                                                            Odd semester
+                                                        @else
+                                                            Even semester
+                                                        @endif
                                                     </p>
                                                 </div>
-                                                <x-badge :tone="(int) $semesterNumber % 2 === 1 ? 'brand' : 'sky'">
+                                                <x-badge :tone="$semester === 1 ? 'brand' : ($semester === 3 ? 'amber' : 'sky')">
                                                     {{ $semesterCourses->count() }}
                                                 </x-badge>
                                             </div>
@@ -106,12 +115,17 @@
                                                 @forelse ($semesterCourses as $course)
                                                     <x-offering-toggle :course="$course" :plan="$plan"
                                                         :offered="isset($existing[$course->id])"
-                                                        :year="(int) ceil($semesterNumber / 2)" />
+                                                        :year="$year" />
                                                 @empty
                                                     <p class="rounded-2xl border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-400">
                                                         No courses in this semester
                                                     </p>
                                                 @endforelse
+                                            </div>
+
+                                            <div class="mt-3 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-xs">
+                                                <span class="font-semibold uppercase tracking-wide text-slate-400">Total credits</span>
+                                                <span class="font-bold text-slate-700">{{ $semesterCourses->sum('credits') }} cr</span>
                                             </div>
                                         </div>
                                     @endforeach
@@ -119,53 +133,76 @@
                             </section>
                         @endif
                     @endforeach
-                </div>
 
-                {{-- Elective courses have no year of their own: the student fills the
-                     plan's Elective Option slots with them, in whichever term. --}}
-                @if ($electives->isNotEmpty())
-                    <div id="elective-courses-{{ $plan->id }}" class="mt-6 scroll-mt-24 rounded-2xl border border-brand-200 bg-brand-50/40 p-3.5">
-                        <div class="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-brand-100 pb-2.5">
-                            <div class="flex items-center gap-2.5">
-                                <span class="grid size-8 place-items-center rounded-xl bg-brand-100 text-brand-600">
-                                    <x-icon name="sparkles" class="size-4" />
-                                </span>
-                                <div>
-                                    <p class="text-sm font-semibold text-slate-700">Elective Course</p>
-                                    <p class="text-xs text-slate-400">
-                                        Offered without a year — chosen by the student for an Elective Option slot
-                                    </p>
+                    @if ($withoutTerm->isNotEmpty())
+                        <div class="mt-6 scroll-mt-24 rounded-2xl border border-slate-200 bg-slate-50/40 p-3.5">
+                            <div class="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                                <div class="flex items-center gap-2.5">
+                                    <span class="grid size-8 place-items-center rounded-xl bg-slate-100 text-slate-600">
+                                        <x-icon name="calendar" class="size-4" />
+                                    </span>
+                                    <div>
+                                        <p class="text-sm font-semibold text-slate-700">Courses without a term</p>
+                                        <p class="text-xs text-slate-400">Attached to this plan, but not placed in a year or semester yet</p>
+                                    </div>
                                 </div>
+                                <x-badge tone="slate">{{ $withoutTerm->count() }}</x-badge>
                             </div>
-                            <x-badge tone="brand">{{ $electives->count() }}</x-badge>
-                        </div>
 
-                        <div class="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">
-                            @foreach ($electives as $course)
-                                <x-offering-toggle :course="$course" :plan="$plan"
-                                    :offered="isset($existing[$course->id])" />
-                            @endforeach
+                            <div class="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">
+                                @foreach ($withoutTerm as $course)
+                                    <x-offering-toggle :course="$course" :plan="$plan"
+                                        :offered="isset($existing[$course->id])" />
+                                @endforeach
+                            </div>
                         </div>
-                    </div>
-                @endif
-            </x-card>
-        @empty
-            <x-card pad>
-                <p class="py-10 text-center text-sm text-slate-400">
-                    @if ($selectedPlan)
-                        This programme plan has no courses attached to it yet.
-                    @else
-                        No courses are attached to any programme plan yet.
                     @endif
-                </p>
-            </x-card>
-        @endforelse
-    </div>
 
-    @if ($withoutCourses->isNotEmpty())
-        <p class="mt-5 text-xs text-slate-400">
-            Plans without courses:
-            {{ $withoutCourses->pluck('code')->implode(', ') }}
-        </p>
-    @endif
-@endsection
+                    {{-- Elective courses have no year of their own: the student fills the
+                         plan's Elective Option slots with them, in whichever term. --}}
+                    @if ($electives->isNotEmpty())
+                        <div id="elective-courses-{{ $plan->id }}" class="mt-6 scroll-mt-24 rounded-2xl border border-brand-200 bg-brand-50/40 p-3.5">
+                            <div class="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-brand-100 pb-2.5">
+                                <div class="flex items-center gap-2.5">
+                                    <span class="grid size-8 place-items-center rounded-xl bg-brand-100 text-brand-600">
+                                        <x-icon name="sparkles" class="size-4" />
+                                    </span>
+                                    <div>
+                                        <p class="text-sm font-semibold text-slate-700">Elective Course</p>
+                                        <p class="text-xs text-slate-400">
+                                            Offered without a year — chosen by the student for an Elective Option slot
+                                        </p>
+                                    </div>
+                                </div>
+                                <x-badge tone="brand">{{ $electives->count() }}</x-badge>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">
+                                @foreach ($electives as $course)
+                                    <x-offering-toggle :course="$course" :plan="$plan"
+                                        :offered="isset($existing[$course->id])" />
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+                </x-card>
+            @empty
+                <x-card pad>
+                    <p class="py-10 text-center text-sm text-slate-400">
+                        @if ($selectedPlan)
+                            This programme plan has no courses attached to it yet.
+                        @else
+                            No courses are attached to any programme plan yet.
+                        @endif
+                    </p>
+                </x-card>
+            @endforelse
+        </div>
+
+        @if ($withoutCourses->isNotEmpty())
+            <p class="mt-5 text-xs text-slate-400">
+                Plans without courses:
+                {{ $withoutCourses->pluck('code')->implode(', ') }}
+            </p>
+        @endif
+    @endsection

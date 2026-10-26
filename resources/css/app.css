@@ -252,6 +252,22 @@
         display: block !important;
     }
 
+    /* Hide the application chrome so only the slip prints. */
+    #app-sidebar,
+    #sidebar-backdrop,
+    header,
+    footer {
+        display: none !important;
+    }
+
+    .lg\:pl-72 {
+        padding-left: 0 !important;
+    }
+
+    main {
+        padding: 0 !important;
+    }
+
     body {
         background: #fff !important;
     }
@@ -261,6 +277,7 @@
         border: none !important;
         border-radius: 0 !important;
         padding: 0 !important;
+        max-width: 100% !important;
     }
 
     .print-break {

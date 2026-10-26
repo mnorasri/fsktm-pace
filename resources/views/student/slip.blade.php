@@ -14,26 +14,23 @@
 
     <div class="print-container card mx-auto max-w-3xl p-8">
         {{-- Letterhead --}}
-        <div class="flex items-start justify-between gap-6 border-b-2 border-slate-800 pb-4">
-            <div class="flex items-center gap-3">
-                <span class="grid size-12 place-items-center rounded-2xl bg-slate-900 text-white">
-                    <x-icon name="academic-cap" class="size-7" />
-                </span>
+        <div class="border-b-2 border-slate-800 pb-4">
+            <div class="flex flex-col items-center gap-2 text-center">
+                <img src="{{ asset('images/uthm-logo.png') }}" alt="Universiti Tun Hussein Onn Malaysia"
+                    class="h-20 w-auto object-contain" />
                 <div>
-                    <p class="text-lg font-bold leading-tight text-slate-900">Universiti FSKTM</p>
-                    <p class="text-xs text-slate-500">Faculty of Computer Science &amp; Information Technology</p>
+                    <p class="text-lg font-bold leading-tight text-slate-900">Faculty of Computer Science &amp; Information Technology</p>
+                    <p class="text-xl leading-tight text-slate-500">Universiti Tun Hussein Onn Malaysia</p>
                 </div>
-            </div>
-            <div class="text-right">
-                <p class="text-xs font-semibold uppercase tracking-widest text-slate-400">Pre-Registration</p>
-                <p class="text-base font-bold text-slate-900">{{ $activeSession }}</p>
-                <p class="text-sm text-slate-600">Semester {{ $activeSemester }}</p>
             </div>
         </div>
 
         <h1 class="mt-5 text-center text-xl font-bold uppercase tracking-wide text-slate-900">
             Course Pre-Registration Slip
         </h1>
+        <p class="text-center text-sm font-semibold text-slate-700">
+            {{ $activeSession }} · Semester {{ $activeSemester }}
+        </p>
         <p class="text-center text-xs text-slate-400">
             Generated on {{ $generatedAt->format('d F Y, h:i A') }} · Slip No. PR-{{ str_pad((string) $student->id, 5, '0', STR_PAD_LEFT) }}-{{ $activeSession }}
         </p>

@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\CoursePlan;
 use App\Models\CourseType;
 use App\Models\Department;
 use App\Models\MqfSc;
@@ -47,18 +46,6 @@ class ConfigController extends Controller
                     'level' => ['nullable', 'string', 'max:40'],
                     'duration_years' => ['required', 'numeric', 'min:1', 'max:8'],
                     'total_credits' => ['required', 'integer', 'min:1', 'max:300'],
-                ],
-            ],
-            'course-plans' => [
-                'label' => 'Course Plans',
-                'model' => CoursePlan::class,
-                'rules' => [
-                    'program_id' => ['nullable', 'exists:programs,id'],
-                    'code' => ['required', 'string', 'max:40'],
-                    'name' => ['required', 'string', 'max:150'],
-                    'version' => ['nullable', 'string', 'max:20'],
-                    'total_credits' => ['nullable', 'integer', 'min:1', 'max:300'],
-                    'description' => ['nullable', 'string'],
                 ],
             ],
             'course-types' => [
@@ -107,7 +94,6 @@ class ConfigController extends Controller
             'activeSemester' => Setting::get('active_semester', '1'),
             'departments' => Department::orderBy('code')->get(),
             'programs' => Program::with('department')->orderBy('code')->get(),
-            'plans' => CoursePlan::with('program')->orderBy('code')->get(),
             'courseTypes' => CourseType::orderBy('code')->get(),
             'mqfs' => MqfSc::orderBy('code')->get(),
             'vbes' => Vbe::orderBy('code')->get(),

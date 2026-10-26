@@ -2,6 +2,7 @@
 
 use App\Models\Course;
 use App\Models\CoursePlan;
+use App\Models\Department;
 use App\Models\Offering;
 use App\Models\PreRegistration;
 use App\Models\Program;
@@ -36,13 +37,13 @@ function makeBatchStudent(): array
         'semester' => 2, 'course_plan_id' => $plan->id,
     ]);
 
-    $advisor = User::factory()->create(['role' => 'advisor']);
+    $advisor = User::factory()->create(['role' => 'advisor', 'staff_id' => 'adv-batch']);
 
     $student = User::factory()->create([
         'role' => 'student',
         'program_id' => $program->id,
         'plan_id' => $plan->id,
-        'advisor_id' => $advisor->id,
+        'advisor_id' => $advisor->staff_id,
         'plan_status' => 'approved',
     ]);
 
@@ -178,7 +179,7 @@ test('returning the batch unlocks it, keeps the note, and allows a resubmission'
         ->and($submission->note)->toBeNull();
 });
 
-test('the batch can only be sent with an approved plan and at least one course', function () {
+test('the batch can only be sent with at least one course', function () {
     [$student, $advisor, $first, $second] = makeBatchStudent();
 
     $offeringA = offerBatchCourse($first);
@@ -190,19 +191,12 @@ test('the batch can only be sent with an approved plan and at least one course',
 
     expect(RegistrationSubmission::where('user_id', $student->id)->exists())->toBeFalse();
 
-    // A plan that has not been approved blocks the submission outright.
-    $student->update(['plan_status' => 'submitted']);
-    $this->actingAs($student)->post(route('student.pre-registration.store', $offeringA))->assertSessionHasErrors('offering');
-
-    $student->update(['plan_status' => 'approved']);
     $this->actingAs($student)->post(route('student.pre-registration.store', $offeringA))->assertSessionHasNoErrors();
 
-    $student->update(['plan_status' => 'draft']);
-    $this->actingAs($student)
-        ->post(route('student.pre-registration.submit'))
-        ->assertSessionHasErrors('registration');
+    // A course is selected, so the batch goes through.
+    $this->actingAs($student)->post(route('student.pre-registration.submit'))->assertSessionHasNoErrors();
 
-    expect(RegistrationSubmission::where('user_id', $student->id)->exists())->toBeFalse();
+    expect(RegistrationSubmission::where('user_id', $student->id)->exists())->toBeTrue();
 });
 
 test('an unrelated advisor cannot decide the batch', function () {
@@ -224,7 +218,7 @@ test('an unrelated advisor cannot decide the batch', function () {
     // A student with nothing submitted cannot be decided either.
     $other = User::factory()->create([
         'role' => 'student',
-        'advisor_id' => $advisor->id,
+        'advisor_id' => $advisor->staff_id,
         'program_id' => $student->program_id,
         'plan_id' => $student->plan_id,
     ]);
@@ -271,4 +265,30 @@ test('the advisor dashboard shows the batch awaiting their decision', function (
         // The per-course buttons step aside for the batch decision.
         ->assertDontSee(route('advisor.registrations.approve', $registration), false)
         ->assertDontSee(route('advisor.registrations.reject', $registration), false);
+});
+
+test('a head of department cannot decide a student they do not advise', function () {
+    [$student] = makeBatchStudent();
+
+    $department = Department::create(['code' => 'HOD', 'name' => 'HoD Department']);
+    $student->update(['department_id' => $department->id]);
+
+    $hod = User::factory()->create([
+        'role' => 'advisor',
+        'is_hod' => true,
+        'department_id' => $department->id,
+        'staff_id' => 'hod-batch',
+    ]);
+
+    // Same department, but the student belongs to another PAK advisor.
+    $this->actingAs($hod)
+        ->post(route('advisor.registrations.batch.approve', $student))
+        ->assertForbidden();
+
+    // Once the student is their advisee, the decision is allowed through.
+    $student->update(['advisor_id' => 'hod-batch']);
+
+    $this->actingAs($hod)
+        ->post(route('advisor.registrations.batch.approve', $student))
+        ->assertSessionHasErrors('registration');
 });

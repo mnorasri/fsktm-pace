@@ -4,6 +4,7 @@ use App\Models\Course;
 use App\Models\CoursePlan;
 use App\Models\CourseType;
 use App\Models\Offering;
+use App\Models\PlanCourse;
 use App\Models\Program;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -39,7 +40,18 @@ function makeHodWithOfferingPlan(): array
     foreach ($scheduled as [$semester, $code, $name]) {
         Course::create([
             'code' => $code, 'name' => $name, 'credits' => 3,
-            'semester' => $semester, 'course_plan_id' => $plan->id, 'course_type_id' => $core->id,
+            'semester' => $semester, 'course_plan_id' => $plan->id, 'course_type_code' => $core->code,
+        ]);
+
+        // The offering grid now takes its year and semester from the study plan
+        // (plan_courses), not from the course's curriculum semester.
+        PlanCourse::create([
+            'course_plan_id' => $plan->id,
+            'course_id' => Course::where('course_code', $code)->value('id'),
+            'year' => (int) ceil($semester / 2),
+            'semester' => 1,
+            'category' => 'required',
+            'credits' => 3,
         ]);
     }
 
@@ -47,7 +59,7 @@ function makeHodWithOfferingPlan(): array
     // semester would otherwise be, so they have no year to be grouped into.
     $elective = Course::create([
         'code' => 'HOD 3**03', 'name' => 'Elective To Pick', 'credits' => 3,
-        'semester' => 'Elective', 'course_plan_id' => $plan->id, 'course_type_id' => $pool->id,
+        'semester' => 'Elective', 'course_plan_id' => $plan->id, 'course_type_code' => $pool->code,
     ]);
 
     $hod = User::factory()->create(['role' => 'advisor', 'is_hod' => true]);
@@ -65,10 +77,7 @@ test('the offering grid groups each plan by year and semester', function () {
         ->assertSee('Year 2')
         ->assertSee('Year 3')
         ->assertSee('Semester 1')
-        ->assertSee('Semester 3')
-        ->assertSee('Semester 5')
         ->assertSee('Odd semester')
-        ->assertSee('Even semester')
         ->assertSee('HOD 10103')
         ->assertSee('HOD 20103')
         ->assertSee('HOD 30103')

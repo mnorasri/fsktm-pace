@@ -71,7 +71,7 @@ class StudyPlanController extends Controller
             'electiveChoices' => $electiveChoices,
             'replaceableCourses' => Course::where('is_active', true)
                 ->with('courseType')
-                ->orderBy('code')
+                ->orderBy('course_code')
                 ->get(),
             'activeSession' => Setting::get('active_session'),
             'activeSemester' => Setting::get('active_semester'),

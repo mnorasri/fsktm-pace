@@ -1,11 +1,7 @@
 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
     <label class="block">
-        <span class="label">Matric No.</span>
-        <input type="text" name="student_id" class="input" placeholder="e.g. A210001">
-    </label>
-    <label class="block">
-        <span class="label">Student Phone</span>
-        <input type="text" name="phone" class="input" placeholder="e.g. 0123456789">
+        <span class="label">Matric No. <span class="text-[10px] font-bold uppercase tracking-wider text-brand-600">Primary key</span></span>
+        <input type="text" name="student_id" class="input font-mono" placeholder="e.g. A210001" required>
     </label>
     <label class="block">
         <span class="label">Student Name</span>
@@ -34,12 +30,12 @@
         </select>
     </label>
     <label class="block sm:col-span-2">
-        <span class="label">PAK Advisor (Lecturer ID)</span>
+        <span class="label">PAK Advisor (Staff ID)</span>
         <select name="advisor_id" class="select">
             <option value="">— None —</option>
             @foreach ($advisors as $advisor)
-                <option value="{{ $advisor->id }}">
-                    {{ $advisor->name }}{{ $advisor->staff_id ? ' — '.$advisor->staff_id : '' }}
+                <option value="{{ $advisor->staff_id }}">
+                    {{ $advisor->name }} — {{ $advisor->staff_id }}
                 </option>
             @endforeach
         </select>
@@ -51,6 +47,15 @@
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
             </select>
+        </label>
+        <label class="block sm:col-span-2">
+            <span class="label">New password</span>
+            <input type="password" name="password" class="input" placeholder="Leave blank to keep the current password">
+        </label>
+    @else
+        <label class="block sm:col-span-2">
+            <span class="label">Password</span>
+            <input type="password" name="password" class="input" placeholder="Defaults to: R@hsi4">
         </label>
     @endif
 </div>

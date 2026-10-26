@@ -13,6 +13,6 @@ class MqfSc extends Model
 
     public function courses(): HasMany
     {
-        return $this->hasMany(Course::class);
+        return $this->hasMany(Course::class, 'sc_code', 'code');
     }
 }

@@ -14,6 +14,8 @@
         </x-slot:actions>
     </x-page-header>
 
+    @include('partials.import-report')
+
     <form method="GET" class="card card-pad mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div class="relative lg:col-span-2">
             <x-icon name="search" class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
@@ -36,6 +38,7 @@
             <table class="data-table">
                 <thead>
                     <tr>
+                        <th>Matric No.</th>
                         <th>Student</th>
                         <th>Programme / Plan</th>
                         <th>PAK Advisor</th>
@@ -46,16 +49,22 @@
                 <tbody>
                     @forelse ($students as $student)
                         <tr>
+                            <td class="font-mono text-xs font-semibold text-slate-600">{{ $student->student_id ?? '—' }}</td>
                             <td>
                                 <p class="font-semibold text-slate-800">{{ $student->name }}</p>
-                                <p class="text-xs text-slate-400">{{ $student->student_id }} · {{ $student->email }}</p>
+                                <p class="text-xs text-slate-400">{{ $student->email }}</p>
                             </td>
                             <td class="text-xs text-slate-500">
                                 {{ $student->program?->code ?? '—' }}
                                 <span class="text-slate-300">/</span>
                                 {{ $student->plan?->code ?? '—' }}
                             </td>
-                            <td class="text-xs text-slate-500">{{ $student->advisor?->name ?? '—' }}</td>
+                            <td class="text-xs text-slate-500">
+                                <p class="text-slate-600">{{ $student->advisor?->name ?? '—' }}</p>
+                                @if ($student->advisor_id)
+                                    <p class="font-mono text-[11px] text-slate-400">{{ $student->advisor_id }}</p>
+                                @endif
+                            </td>
                             <td>
                                 @php
                                     $tone = ['approved' => 'emerald', 'submitted' => 'amber', 'rejected' => 'rose', 'draft' => 'slate'][$student->plan_status] ?? 'slate';
@@ -91,7 +100,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="5" class="py-8 text-center text-sm text-slate-400">No students found.</td></tr>
+                        <tr><td colspan="6" class="py-8 text-center text-sm text-slate-400">No students found.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -137,15 +146,16 @@
 
     {{-- Import --}}
     <x-modal id="import-students" title="Bulk import students"
-        subtitle="CSV columns: matric_num, student_name, student_email, program_code, plan_code, lecturer_id, student_phone">
+        subtitle="CSV columns: matric_num, student_name, student_email, program_code, plan_code, advisor_id, password">
         <form method="POST" action="{{ route('admin.students.import') }}" enctype="multipart/form-data" class="space-y-4">
             @csrf
             <input type="file" name="file" accept=".csv,text/csv" class="input" required>
             <div class="rounded-2xl bg-slate-50 p-3.5 text-xs text-slate-500">
-                <p class="font-mono">matric_num,student_name,student_email,program_code,plan_code,lecturer_id,student_phone</p>
-                <p class="mt-2 font-mono">A210001,Aina Rahman,aina@student.fsktm.test,BIP,CS241-PLAN,LEC010,0123456789</p>
-                <p class="mt-2"><span class="font-semibold">program_code</span> and <span class="font-semibold">plan_code</span> are matched by code, and <span class="font-semibold">lecturer_id</span> is the PAK advisor's lecturer ID.</p>
-                <p class="mt-1">Rows are matched on <span class="font-semibold">matric_num</span> (or email). New accounts default to password <span class="font-semibold">password</span>.</p>
+                <p class="font-mono">matric_num,student_name,student_email,program_code,plan_code,advisor_id,password</p>
+                <p class="mt-2 font-mono">A210001,Aina Rahman,aina@student.fsktm.test,BIP,CS241-PLAN,norasri,secret123</p>
+                <p class="mt-2"><span class="font-semibold">matric_num</span> is the student's primary key. <span class="font-semibold">program_code</span> and <span class="font-semibold">plan_code</span> are matched by code, and <span class="font-semibold">advisor_id</span> is the PAK advisor's <span class="font-semibold">staff ID</span> (foreign key).</p>
+                <p class="mt-1">Rows are matched on <span class="font-semibold">matric_num</span> (or email). A blank password defaults to <span class="font-semibold">R@hsi4</span>.</p>
+                <p class="mt-1">A row that fails (missing matric, unknown programme/plan/advisor, clashing email) is skipped; the rest of the file still imports and the summary lists every skipped row.</p>
             </div>
             <div class="flex items-center justify-end gap-2">
                 <button type="button" data-modal-close class="btn-ghost">Cancel</button>

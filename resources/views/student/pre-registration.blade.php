@@ -4,7 +4,7 @@
 
 @section('content')
     <x-page-header title="Course Pre-Registration"
-        subtitle="{{ $activeSession }} · Semester {{ $activeSemester }} — {{ $planApproved ? 'your study plan, with only the courses offered this term enabled' : 'preview only — registration opens once your study plan is approved' }}">
+        subtitle="{{ $activeSession }} · Semester {{ $activeSemester }} — your study plan, with only the courses offered this term enabled">
         <x-slot:actions>
             <x-badge tone="{{ $committedCredits >= $cap ? 'rose' : 'brand' }}" dot>
                 {{ $committedCredits }} / {{ $cap }} credits
@@ -14,32 +14,6 @@
             </a>
         </x-slot:actions>
     </x-page-header>
-
-    @unless ($planApproved)
-        <div class="mb-5 flex flex-wrap items-start gap-3 rounded-3xl border border-amber-200 bg-amber-50 p-5">
-            <span class="grid size-9 shrink-0 place-items-center rounded-2xl bg-amber-100 text-amber-600">
-                <x-icon name="lock" class="size-5" />
-            </span>
-            <div class="min-w-[16rem] flex-1">
-                <p class="text-sm font-bold text-amber-900">
-                    Registration is locked until your advisor approves your study plan
-                </p>
-                <p class="mt-1 text-sm text-amber-800">
-                    Your plan is
-                    <span class="font-semibold">
-                        {{ $student->plan_status === 'submitted' ? "waiting for your advisor's review" : $student->plan_status }}
-                    </span>
-                    @if ($student->plan_review_note)
-                        — &ldquo;{{ $student->plan_review_note }}&rdquo;
-                    @endif
-                    . You can browse the courses offered this term, but only an approved plan may be registered.
-                </p>
-            </div>
-            <a href="{{ route('student.study-plan') }}" class="btn-ghost btn-sm">
-                <x-icon name="book" class="size-3.5" /> Open my study plan
-            </a>
-        </div>
-    @endunless
 
     {{-- The term's pre-registration is sent to the advisor as one batch. --}}
     @if ($planApproved)

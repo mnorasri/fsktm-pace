@@ -32,28 +32,28 @@ function makeStudentWithElectives(): array
 
     Course::create([
         'code' => 'TS2 10103', 'name' => 'Core Course', 'credits' => 3,
-        'semester' => 1, 'course_plan_id' => $plan->id, 'course_type_id' => $required->id,
+        'semester' => 1, 'course_plan_id' => $plan->id, 'course_type_code' => $required->code,
     ]);
 
     // Semester 4 → the slot is seeded into Year 2 Semester 2.
     $slot = Course::create([
         'code' => 'TS* 3**03-1', 'name' => 'Elektif I', 'credits' => 3,
-        'semester' => 4, 'course_plan_id' => $plan->id, 'course_type_id' => $option->id,
+        'semester' => 4, 'course_plan_id' => $plan->id, 'course_type_code' => $option->code,
     ]);
 
     Course::create([
         'code' => 'TS* 3**03-2', 'name' => 'Elektif II', 'credits' => 3,
-        'semester' => 5, 'course_plan_id' => $plan->id, 'course_type_id' => $option->id,
+        'semester' => 5, 'course_plan_id' => $plan->id, 'course_type_code' => $option->code,
     ]);
 
     $electives = [
         Course::create([
             'code' => 'TS2 30603', 'name' => 'DotNet Programming', 'credits' => 3,
-            'semester' => 0, 'course_plan_id' => $plan->id, 'course_type_id' => $pool->id,
+            'semester' => 0, 'course_plan_id' => $plan->id, 'course_type_code' => $pool->code,
         ]),
         Course::create([
             'code' => 'TS2 34303', 'name' => 'Machine Learning', 'credits' => 3,
-            'semester' => 0, 'course_plan_id' => $plan->id, 'course_type_id' => $pool->id,
+            'semester' => 0, 'course_plan_id' => $plan->id, 'course_type_code' => $pool->code,
         ]),
     ];
 
@@ -154,7 +154,7 @@ test('an elective course from another programme cannot fill the slot', function 
     $foreign = Course::create([
         'code' => 'TS3 30603', 'name' => 'Foreign Elective', 'credits' => 3,
         'semester' => 0, 'course_plan_id' => $otherPlan->id,
-        'course_type_id' => CourseType::where('code', CourseType::ELECTIVE_COURSE)->value('id'),
+        'course_type_code' => CourseType::where('code', CourseType::ELECTIVE_COURSE)->value('code'),
     ]);
 
     $entry = electiveSlotEntry($student, $slot);
@@ -174,7 +174,7 @@ test('the same elective cannot fill two slots', function () {
 
     $first = electiveSlotEntry($student, $slot);
     $second = StudyPlanEntry::where('user_id', $student->id)
-        ->whereHas('course', fn ($query) => $query->where('name', 'Elektif II'))
+        ->whereHas('course', fn ($query) => $query->where('course_name_en', 'Elektif II'))
         ->firstOrFail();
 
     $this->actingAs($student)
@@ -251,8 +251,8 @@ test('an elective slot is part of the curriculum and cannot be removed or moved'
 test('an advisor sees which elective option a chosen elective course replaced', function () {
     [$student, , $slot, $electives] = makeStudentWithElectives();
 
-    $advisor = User::factory()->create(['role' => 'advisor']);
-    $student->forceFill(['advisor_id' => $advisor->id, 'plan_status' => 'submitted'])->save();
+    $advisor = User::factory()->create(['role' => 'advisor', 'staff_id' => 'adv-elective']);
+    $student->forceFill(['advisor_id' => $advisor->staff_id, 'plan_status' => 'submitted'])->save();
 
     $entry = electiveSlotEntry($student, $slot);
 
@@ -263,7 +263,7 @@ test('an advisor sees which elective option a chosen elective course replaced', 
     // My Supervisees: the chosen "Elective Course" keeps the name of the
     // "Elective Option" it replaced, so the curriculum slot stays traceable.
     $this->actingAs($advisor)
-        ->get(route('advisor.dashboard'))
+        ->get(route('advisor.dashboard', ['student' => $student->id, 'tab' => 'plan']))
         ->assertOk()
         ->assertSee($electives[0]->code.' · '.$electives[0]->name)
         ->assertSee('Previously: Elektif I');
@@ -285,7 +285,7 @@ test('a plan row that is not an elective option refuses an elective choice', fun
     $this->actingAs($student)->get(route('student.study-plan'))->assertOk();
 
     $core = StudyPlanEntry::where('user_id', $student->id)
-        ->whereHas('course', fn ($query) => $query->where('name', 'Core Course'))
+        ->whereHas('course', fn ($query) => $query->where('course_name_en', 'Core Course'))
         ->firstOrFail();
 
     $this->actingAs($student)

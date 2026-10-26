@@ -39,7 +39,6 @@
             <p class="nav-group-label">Administration</p>
             <x-nav-link :href="route('admin.dashboard')" icon="home" :active="request()->routeIs('admin.dashboard')">Dashboard</x-nav-link>
             <x-nav-link :href="route('admin.configs.index')" icon="cog" :active="request()->routeIs('admin.configs.*')">Manage Configs</x-nav-link>
-            <x-nav-link :href="route('admin.courses.index')" icon="book" :active="request()->routeIs('admin.courses.*')">Manage Courses</x-nav-link>
 
             <p class="nav-group-label">People</p>
             <x-nav-link :href="route('admin.lecturers.index')" icon="briefcase" :active="request()->routeIs('admin.lecturers.*')">Manage Lecturers</x-nav-link>
@@ -51,13 +50,22 @@
         @if ($user->isAdvisor())
             <p class="nav-group-label">Advising</p>
             <x-nav-link :href="route('advisor.dashboard')" icon="users" :active="request()->routeIs('advisor.dashboard')">My Supervisees</x-nav-link>
+        @endif
 
-            @if ($user->isHod())
-                <p class="nav-group-label">Head of Department</p>
-                <x-nav-link :href="route('advisor.offering.manage')" icon="clipboard" :active="request()->routeIs('advisor.offering.manage')">Manage Offering</x-nav-link>
-                <x-nav-link :href="route('advisor.offering.grid')" icon="layers" :active="request()->routeIs('advisor.offering.grid')">Course Offering</x-nav-link>
-                <x-nav-link :href="route('advisor.offering.workload')" icon="chart" :active="request()->routeIs('advisor.offering.workload')">Lecturer Workload</x-nav-link>
-            @endif
+        {{-- The Head of Department toolset is also open to the administrator. --}}
+        @if ($user->isHod() || $user->isAdmin())
+            <p class="nav-group-label">Head of Department</p>
+            <x-nav-link :href="route('advisor.offering.grid')" icon="layers" :active="request()->routeIs('advisor.offering.grid')">Course Offering</x-nav-link>
+            <x-nav-link :href="route('advisor.offering.manage')" icon="clipboard" :active="request()->routeIs('advisor.offering.manage')">Manage Offering</x-nav-link>
+            <x-nav-link :href="route('advisor.offering.workload')" icon="chart" :active="request()->routeIs('advisor.offering.workload')">Lecturer Workload</x-nav-link>
+        @endif
+
+        {{-- Curriculum is shared by the administrator, HoD and HoP. --}}
+        @if ($user->isAdmin() || $user->isHod() || $user->isHeadOfProgram())
+            <p class="nav-group-label">Curriculum</p>
+            <x-nav-link :href="route('curriculum.programmes.index')" icon="academic-cap" :active="request()->routeIs('curriculum.programmes.*')">Programmes</x-nav-link>
+            <x-nav-link :href="route('curriculum.courses.index')" icon="book" :active="request()->routeIs('curriculum.courses.*')">Courses</x-nav-link>
+            <x-nav-link :href="route('curriculum.study-plans.index')" icon="calendar" :active="request()->routeIs('curriculum.study-plans.*')">Study Plans</x-nav-link>
         @endif
 
         @if ($user->isStudent())
@@ -79,7 +87,7 @@
                 {{ strtoupper(substr($user->name, 0, 1)) }}
             </span>
             <div class="min-w-0 flex-1">
-                <p class="truncate text-sm font-semibold text-slate-800">{{ $user->name }}</p>
+                <p class="break-words text-sm font-semibold text-slate-800">{{ $user->name }}</p>
                 <p class="truncate text-[11px] text-slate-400">{{ $user->email }}</p>
             </div>
         </div>

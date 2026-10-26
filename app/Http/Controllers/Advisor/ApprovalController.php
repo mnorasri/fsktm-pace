@@ -131,8 +131,7 @@ class ApprovalController extends Controller
     {
         $advisor = auth()->user();
 
-        $allowed = $student->advisor_id === $advisor->id
-            || ($advisor->isHod() && $advisor->department_id && $student->department_id === $advisor->department_id)
+        $allowed = $student->advisor_id === $advisor->staff_id
             || $advisor->isAdmin();
 
         abort_unless($allowed, 403);

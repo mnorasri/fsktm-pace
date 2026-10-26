@@ -7,7 +7,7 @@
         subtitle="{{ \App\Models\Setting::get('active_session', '2025/2026') }} · Semester {{ \App\Models\Setting::get('active_semester', '1') }}">
         <x-slot:actions>
             <a href="{{ route('admin.configs.index') }}" class="btn-ghost"><x-icon name="cog" class="size-4" /> Configs</a>
-            <a href="{{ route('admin.courses.index') }}" class="btn-primary"><x-icon name="book" class="size-4" /> Courses</a>
+            <a href="{{ route('curriculum.courses.index') }}" class="btn-primary"><x-icon name="book" class="size-4" /> Courses</a>
         </x-slot:actions>
     </x-page-header>
 
@@ -58,7 +58,7 @@
             <div class="space-y-2.5">
                 @foreach ([
                     ['admin.configs.index', 'cog', 'Manage Configs', 'Departments, programmes, plans'],
-                    ['admin.courses.index', 'book', 'Manage Courses', 'Create, filter and bulk import'],
+                    ['curriculum.courses.index', 'book', 'Manage Courses', 'Curriculum course directory'],
                     ['admin.lecturers.index', 'briefcase', 'Manage Lecturers', 'Accounts and PAK mapping'],
                     ['admin.students.index', 'users', 'Manage Students', 'Directory and CSV import'],
                     ['admin.hod.index', 'identification', 'Manage HoD', 'Assign department heads'],

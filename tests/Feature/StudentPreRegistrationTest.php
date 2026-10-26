@@ -123,7 +123,7 @@ test('an offered course can be added while a course that is not offered is refus
         ->and(substr_count($response->getContent(), 'btn-primary btn-sm'))->toBe(0);
 });
 
-test('registration stays locked until the advisor approves the study plan', function () {
+test('registration is open even before the advisor approves the study plan', function () {
     [$student, $plan, $odd, $even] = makePreRegStudent();
 
     Setting::put('active_session', '20262027');
@@ -135,26 +135,17 @@ test('registration stays locked until the advisor approves the study plan', func
 
     $response = $this->actingAs($student)->get(route('student.pre-registration'))->assertOk();
 
-    // The plan is still listed — only the registration itself is on hold.
-    $response->assertSee('Registration is locked until your advisor approves your study plan')
-        ->assertSee($odd->code);
+    // The plan is still listed and registration is no longer gated on approval.
+    $response->assertSee($odd->code);
 
-    expect(substr_count($response->getContent(), 'btn-primary btn-sm'))->toBe(0)
-        ->and($response->getContent())->toContain('Awaiting approval of your study plan.');
+    expect(substr_count($response->getContent(), 'btn-primary btn-sm'))->toBe(1);
 
-    // The server refuses a crafted request too.
+    // The server accepts the crafted request too.
     $this->actingAs($student)
         ->post(route('student.pre-registration.store', $offered))
-        ->assertSessionHasErrors('offering');
+        ->assertSessionHasNoErrors();
 
-    expect(PreRegistration::where('user_id', $student->id)->count())->toBe(0);
-
-    // Approval opens the same course up.
-    $student->update(['plan_status' => 'approved']);
-
-    $html = $this->actingAs($student)->get(route('student.pre-registration'))->assertOk()->getContent();
-
-    expect(substr_count($html, 'btn-primary btn-sm'))->toBe(1);
+    expect(PreRegistration::where('user_id', $student->id)->count())->toBe(1);
 });
 
 test('an offered course is disabled once the credit cap is reached', function () {

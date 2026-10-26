@@ -12,7 +12,7 @@ class Sdg extends Model
 
     public function courses(): HasMany
     {
-        return $this->hasMany(Course::class);
+        return $this->hasMany(Course::class, 'sdg_code', 'code');
     }
 
     /**

@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\Admin\ConfigController;
-use App\Http\Controllers\Admin\CourseController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\HeadOfProgramController;
 use App\Http\Controllers\Admin\HodController;
@@ -9,8 +8,14 @@ use App\Http\Controllers\Admin\LecturerController;
 use App\Http\Controllers\Admin\StudentController;
 use App\Http\Controllers\Advisor\ApprovalController;
 use App\Http\Controllers\Advisor\DashboardController as AdvisorDashboardController;
+use App\Http\Controllers\Advisor\HodCourseController;
 use App\Http\Controllers\Advisor\HodOfferingController;
+use App\Http\Controllers\Advisor\HodStudyPlanController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Curriculum\CourseController as CurriculumCourseController;
+use App\Http\Controllers\Curriculum\ProgrammeController;
+use App\Http\Controllers\Curriculum\StudyPlanController as CurriculumStudyPlanController;
+use App\Http\Controllers\Curriculum\StudyPlanDetailController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Student\DashboardController as StudentDashboardController;
 use App\Http\Controllers\Student\PreRegistrationController;
@@ -59,12 +64,6 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::put('/configs/{type}/{id}', [ConfigController::class, 'update'])->name('configs.update');
     Route::delete('/configs/{type}/{id}', [ConfigController::class, 'destroy'])->name('configs.destroy');
 
-    Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
-    Route::post('/courses', [CourseController::class, 'store'])->name('courses.store');
-    Route::post('/courses/import', [CourseController::class, 'import'])->name('courses.import');
-    Route::put('/courses/{course}', [CourseController::class, 'update'])->name('courses.update');
-    Route::delete('/courses/{course}', [CourseController::class, 'destroy'])->name('courses.destroy');
-
     Route::get('/lecturers', [LecturerController::class, 'index'])->name('lecturers.index');
     Route::post('/lecturers', [LecturerController::class, 'store'])->name('lecturers.store');
     Route::post('/lecturers/import', [LecturerController::class, 'import'])->name('lecturers.import');
@@ -88,10 +87,42 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
 });
 
 // -------------------------------------------------------------------
+// Curriculum management (administrator, HoD and HoP)
+// -------------------------------------------------------------------
+Route::middleware(['auth', 'curriculum'])->prefix('curriculum')->name('curriculum.')->group(function () {
+    Route::get('/programmes', [ProgrammeController::class, 'index'])->name('programmes.index');
+    Route::post('/programmes', [ProgrammeController::class, 'store'])->name('programmes.store');
+    Route::post('/programmes/import', [ProgrammeController::class, 'import'])->name('programmes.import');
+    Route::put('/programmes/{program}', [ProgrammeController::class, 'update'])->name('programmes.update');
+    Route::delete('/programmes/{program}', [ProgrammeController::class, 'destroy'])->name('programmes.destroy');
+
+    Route::get('/courses', [CurriculumCourseController::class, 'index'])->name('courses.index');
+    Route::post('/courses', [CurriculumCourseController::class, 'store'])->name('courses.store');
+    Route::post('/courses/import', [CurriculumCourseController::class, 'import'])->name('courses.import');
+    Route::put('/courses/{course}', [CurriculumCourseController::class, 'update'])->name('courses.update');
+    Route::delete('/courses/{course}', [CurriculumCourseController::class, 'destroy'])->name('courses.destroy');
+
+    Route::get('/study-plans', [CurriculumStudyPlanController::class, 'index'])->name('study-plans.index');
+    Route::post('/study-plans', [CurriculumStudyPlanController::class, 'store'])->name('study-plans.store');
+    Route::post('/study-plans/import', [CurriculumStudyPlanController::class, 'import'])->name('study-plans.import');
+    Route::put('/study-plans/{studyPlan}', [CurriculumStudyPlanController::class, 'update'])->name('study-plans.update');
+    Route::delete('/study-plans/{studyPlan}', [CurriculumStudyPlanController::class, 'destroy'])->name('study-plans.destroy');
+
+    Route::get('/study-plan-details', [StudyPlanDetailController::class, 'index'])->name('study-plan-details.index');
+    Route::post('/study-plan-details', [StudyPlanDetailController::class, 'store'])->name('study-plan-details.store');
+    Route::post('/study-plan-details/import', [StudyPlanDetailController::class, 'import'])->name('study-plan-details.import');
+    Route::put('/study-plan-details/{detail}', [StudyPlanDetailController::class, 'update'])->name('study-plan-details.update');
+    Route::delete('/study-plan-details/{detail}', [StudyPlanDetailController::class, 'destroy'])->name('study-plan-details.destroy');
+});
+
+// -------------------------------------------------------------------
 // Advisor / PAK portal
 // -------------------------------------------------------------------
 Route::middleware(['auth', 'role:advisor'])->prefix('advisor')->name('advisor.')->group(function () {
     Route::get('/', [AdvisorDashboardController::class, 'index'])->name('dashboard');
+    // The detail panel for one supervisee, returned as a fragment so the
+    // dashboard can swap it in without reloading the page.
+    Route::get('/detail', [AdvisorDashboardController::class, 'detail'])->name('dashboard.detail');
 
     Route::post('/plans/{student}/approve', [ApprovalController::class, 'approvePlan'])->name('plans.approve');
     Route::post('/plans/{student}/reject', [ApprovalController::class, 'rejectPlan'])->name('plans.reject');
@@ -101,19 +132,38 @@ Route::middleware(['auth', 'role:advisor'])->prefix('advisor')->name('advisor.')
     // The whole pre-registration for the active term, approved as one batch.
     Route::post('/registrations/{student}/approve-term', [ApprovalController::class, 'approveRegistrationBatch'])->name('registrations.batch.approve');
     Route::post('/registrations/{student}/return-term', [ApprovalController::class, 'returnRegistrationBatch'])->name('registrations.batch.return');
+});
 
-    // Head of Department toolset
-    Route::middleware('hod')->group(function () {
-        Route::get('/offering/manage', [HodOfferingController::class, 'manage'])->name('offering.manage');
-        Route::get('/offering/grid', [HodOfferingController::class, 'grid'])->name('offering.grid');
-        Route::get('/offering/workload', [HodOfferingController::class, 'workload'])->name('offering.workload');
-        Route::get('/offering/export', [HodOfferingController::class, 'export'])->name('offering.export');
-        Route::post('/offering/toggle', [HodOfferingController::class, 'toggle'])->name('offering.toggle');
-        Route::put('/offering/{offering}', [HodOfferingController::class, 'assign'])->name('offering.assign');
+// -------------------------------------------------------------------
+// Head of Department toolset
+// -------------------------------------------------------------------
+// Kept out of the advisor-only group: a Head of Department is an advisor, and
+// the administrator may open these pages as well (see EnsureHod).
+Route::middleware(['auth', 'hod'])->prefix('advisor')->name('advisor.')->group(function () {
+    Route::get('/offering/manage', [HodOfferingController::class, 'manage'])->name('offering.manage');
+    Route::get('/offering/grid', [HodOfferingController::class, 'grid'])->name('offering.grid');
+    Route::get('/offering/workload', [HodOfferingController::class, 'workload'])->name('offering.workload');
+    Route::get('/offering/export', [HodOfferingController::class, 'export'])->name('offering.export');
+    Route::post('/offering/toggle', [HodOfferingController::class, 'toggle'])->name('offering.toggle');
+    Route::put('/offering/{offering}', [HodOfferingController::class, 'assign'])->name('offering.assign');
 
-        // One section + lecturer per PAK (advisor) group of an offering.
-        Route::put('/offering/{offering}/group', [HodOfferingController::class, 'assignGroup'])->name('offering.group');
-    });
+    // One section + lecturer per PAK (advisor) group of an offering.
+    Route::put('/offering/{offering}/group', [HodOfferingController::class, 'assignGroup'])->name('offering.group');
+
+    // Course directory: the HoD adds and maintains courses.
+    Route::get('/courses', [HodCourseController::class, 'index'])->name('courses.index');
+    Route::post('/courses', [HodCourseController::class, 'store'])->name('courses.store');
+    Route::put('/courses/{course}', [HodCourseController::class, 'update'])->name('courses.update');
+    Route::delete('/courses/{course}', [HodCourseController::class, 'destroy'])->name('courses.destroy');
+
+    // Study plans: view the curriculum, create a plan and place courses on it.
+    Route::get('/plans', [HodStudyPlanController::class, 'index'])->name('plans.index');
+    Route::post('/plans', [HodStudyPlanController::class, 'store'])->name('plans.store');
+    Route::post('/plans/{plan}/courses', [HodStudyPlanController::class, 'addCourse'])->name('plans.courses.store');
+    Route::post('/plans/{plan}/courses/import', [HodStudyPlanController::class, 'importCourses'])->name('plans.courses.import');
+    Route::put('/plans/{plan}/courses/{planCourse}', [HodStudyPlanController::class, 'updateCourse'])->name('plans.courses.update');
+    Route::delete('/plans/{plan}/courses/{planCourse}', [HodStudyPlanController::class, 'removeCourse'])->name('plans.courses.destroy');
+    Route::delete('/plans/{plan}/attached/{course}', [HodStudyPlanController::class, 'detachCourse'])->name('plans.attached.destroy');
 });
 
 // -------------------------------------------------------------------

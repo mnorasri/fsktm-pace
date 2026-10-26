@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
 
 #[Fillable([
     'name', 'email', 'password', 'role', 'student_id', 'staff_id',
@@ -69,11 +70,20 @@ class User extends Authenticatable
         return $this->role === self::ROLE_STUDENT;
     }
 
+    /**
+     * A Head of Program is an advisor appointed to lead at least one programme.
+     */
+    public function isHeadOfProgram(): bool
+    {
+        return $this->isAdvisor() && $this->headedPrograms()->exists();
+    }
+
     public function roleLabel(): string
     {
         return match (true) {
             $this->isAdmin() => 'System Administrator',
             $this->isHod() => 'Head of Department',
+            $this->isHeadOfProgram() => 'Head of Program',
             $this->isAdvisor() => 'Academic & Career Advisor',
             default => 'Student',
         };
@@ -107,14 +117,44 @@ class User extends Authenticatable
         return $this->belongsTo(CoursePlan::class, 'plan_id');
     }
 
+    /**
+     * A student's advisor_id holds the advisor's staff ID (e.g. "norasri").
+     */
     public function advisor(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'advisor_id');
+        return $this->belongsTo(User::class, 'advisor_id', 'staff_id');
     }
 
     public function advisees(): HasMany
     {
-        return $this->hasMany(User::class, 'advisor_id');
+        return $this->hasMany(User::class, 'advisor_id', 'staff_id');
+    }
+
+    /**
+     * Update this lecturer, carrying their advisees along when the staff ID
+     * itself changes (students reference it as their advisor_id).
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    public function updateWithStaffId(array $attributes): void
+    {
+        $newStaffId = $attributes['staff_id'] ?? $this->staff_id;
+
+        if (blank($this->staff_id) || blank($newStaffId) || $newStaffId === $this->staff_id) {
+            $this->update($attributes);
+
+            return;
+        }
+
+        DB::transaction(function () use ($attributes, $newStaffId) {
+            $adviseeIds = static::query()->where('advisor_id', $this->staff_id)->pluck('id');
+
+            // The constraint blocks a rename while students still point at the
+            // old value, so detach them for the moment the parent changes.
+            static::query()->whereIn('id', $adviseeIds)->update(['advisor_id' => null]);
+            $this->update($attributes);
+            static::query()->whereIn('id', $adviseeIds)->update(['advisor_id' => $newStaffId]);
+        });
     }
 
     public function registrationSubmissions(): HasMany

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureCurriculumManager;
 use App\Http\Middleware\EnsureHod;
 use App\Http\Middleware\EnsureRole;
 use Illuminate\Foundation\Application;
@@ -18,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => EnsureRole::class,
             'hod' => EnsureHod::class,
+            'curriculum' => EnsureCurriculumManager::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

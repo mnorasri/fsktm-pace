@@ -8,9 +8,12 @@ use App\Models\Department;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
+use RuntimeException;
+use Throwable;
 
 class LecturerController extends Controller
 {
@@ -19,7 +22,7 @@ class LecturerController extends Controller
     /**
      * The password every account starts with when none is supplied.
      */
-    public const DEFAULT_PASSWORD = 'password';
+    public const DEFAULT_PASSWORD = 'R@hsi4';
 
     public function index(Request $request): View
     {
@@ -59,7 +62,7 @@ class LecturerController extends Controller
     {
         abort_unless($lecturer->role === User::ROLE_ADVISOR, 404);
 
-        $lecturer->update($this->validated($request, $lecturer));
+        $lecturer->updateWithStaffId($this->validated($request, $lecturer));
 
         return back()->with('status', 'Lecturer account updated.');
     }
@@ -67,6 +70,9 @@ class LecturerController extends Controller
     public function destroy(User $lecturer): RedirectResponse
     {
         abort_unless($lecturer->role === User::ROLE_ADVISOR, 404);
+
+        // Students reference the lecturer's staff ID; clear their advisor.
+        User::where('advisor_id', $lecturer->staff_id)->update(['advisor_id' => null]);
 
         $lecturer->delete();
 
@@ -92,66 +98,121 @@ class LecturerController extends Controller
         $created = 0;
         $updated = 0;
         $hashed = 0;
+        $failures = [];
 
-        foreach ($this->readCsv($request->file('file')) as $row) {
-            // Documented structure: lecturer_name, lecturer_email, lecturer_id,
-            // department_code, password.
-            $name = $this->csvValue($row, 'lecturer_name', 0) ?? $this->csvValue($row, 'name', 0);
-            $email = $this->csvValue($row, 'lecturer_email', 1) ?? $this->csvValue($row, 'email', 1);
-            $staffId = $this->csvValue($row, 'lecturer_id', 2) ?? $this->csvValue($row, 'staff_id', 2);
-            $departmentCode = $this->csvValue($row, 'department_code', 3) ?? $this->csvValue($row, 'department', 3);
-            $password = $this->csvValue($row, 'password', 4);
+        // A bad row must never stop the import: each row is handled on its own
+        // and its failure is recorded so the summary can report it.
+        foreach ($this->readCsv($request->file('file')) as $index => $row) {
+            try {
+                $result = $this->importLecturerRow($row);
 
-            if (blank($email) && blank($staffId)) {
-                continue;
-            }
-
-            $email ??= mb_strtolower($staffId).'@lecturer.fsktm.test';
-            $department = $this->resolveDepartment($departmentCode);
-
-            $attributes = [
-                'name' => $name ?? $email,
-                'staff_id' => $staffId,
-                'department_id' => $department?->id,
-                'role' => User::ROLE_ADVISOR,
-            ];
-
-            $existing = User::whereRaw('lower(email) = ?', [mb_strtolower($email)])->first();
-
-            if (! $existing && $staffId) {
-                $existing = User::whereRaw('lower(staff_id) = ?', [mb_strtolower($staffId)])->first();
-            }
-
-            if (Hash::isHashed((string) $password)) {
-                $hashed++;
-            }
-
-            if ($existing) {
-                $existing->update($attributes);
-
-                // A blank password leaves the current one untouched.
-                if (filled($password)) {
-                    $existing->update(['password' => $this->passwordFrom($password)]);
+                if ($result['status'] === 'created') {
+                    $created++;
+                } else {
+                    $updated++;
                 }
 
-                $updated++;
-            } else {
-                User::create($attributes + [
-                    'email' => $email,
-                    'password' => $this->passwordFrom($password),
-                ]);
-                $created++;
+                if ($result['hashed']) {
+                    $hashed++;
+                }
+            } catch (Throwable $e) {
+                $failures[] = 'Line '.($index + 2).': '.$this->failureReason($e);
             }
         }
 
-        $status = "Lecturer import complete: {$created} created, {$updated} updated. "
+        $report = $this->importReport('Lecturer', $created, $updated, $failures);
+
+        $status = "Lecturer import: {$created} created, {$updated} updated, {$report['failed']} failed. "
             .'Default password: '.self::DEFAULT_PASSWORD.'.';
 
         if ($hashed > 0) {
             $status .= " {$hashed} row(s) supplied an already-hashed password and were kept as-is.";
         }
 
-        return back()->with('status', $status);
+        return back()->with('status', $status)->with('import_report', $report);
+    }
+
+    /**
+     * Import one CSV row, returning whether the lecturer was created or updated
+     * and whether its password was already hashed. Data problems raise an
+     * exception the caller records without aborting the rest of the file.
+     *
+     * @param  array<string|int, string>  $row
+     * @return array{status: string, hashed: bool}
+     *
+     * @throws RuntimeException
+     */
+    protected function importLecturerRow(array $row): array
+    {
+        // Documented structure: staff_id, lecturer_name, lecturer_email,
+        // department_code, password. Headers are matched by name, so the
+        // older lecturer_id / lecturer_name / lecturer_email order still
+        // imports correctly.
+        $staffId = $this->csvValue($row, 'staff_id', 0) ?? $this->csvValue($row, 'lecturer_id', 0);
+        $name = $this->csvValue($row, 'lecturer_name', 1) ?? $this->csvValue($row, 'name', 1);
+        $email = $this->csvValue($row, 'lecturer_email', 2) ?? $this->csvValue($row, 'email', 2);
+        $departmentCode = $this->csvValue($row, 'department_code', 3) ?? $this->csvValue($row, 'department', 3);
+        $password = $this->csvValue($row, 'password', 4);
+
+        // The staff ID is the lecturer's key; a row without one cannot be
+        // matched safely.
+        if (blank($staffId)) {
+            throw new RuntimeException('staff_id is required');
+        }
+
+        $emailProvided = filled($email);
+        $email ??= mb_strtolower($staffId).'@lecturer.fsktm.test';
+        $department = $this->resolveDepartment($departmentCode);
+
+        if ($departmentCode && ! $department) {
+            throw new RuntimeException("department_code \"{$departmentCode}\" was not found");
+        }
+
+        $attributes = [
+            'name' => $name ?? $email,
+            'staff_id' => $staffId,
+            'department_id' => $department?->id,
+            'role' => User::ROLE_ADVISOR,
+        ];
+
+        // Every row commits on its own, so a failure leaves no partial lecturer.
+        return DB::transaction(function () use ($attributes, $staffId, $email, $emailProvided, $password) {
+            // The staff ID is the lecturer's key: a row that keeps its staff ID
+            // updates that lecturer even when the email column changes. Email
+            // is accepted as a fallback for older sheets.
+            $existing = User::whereRaw('lower(staff_id) = ?', [mb_strtolower($staffId)])->first()
+                ?? User::whereRaw('lower(email) = ?', [mb_strtolower($email)])->first();
+
+            if ($existing && $existing->role !== User::ROLE_ADVISOR) {
+                throw new RuntimeException("email \"{$email}\" belongs to an existing {$existing->role} account");
+            }
+
+            $hashed = Hash::isHashed((string) $password);
+
+            if ($existing) {
+                // Keep the login address in sync when the sheet supplies one,
+                // unless another account already owns it.
+                if ($emailProvided && ! User::where('email', $email)->where('id', '!=', $existing->id)->exists()) {
+                    $attributes['email'] = $email;
+                }
+
+                $existing->updateWithStaffId($attributes);
+
+                // A blank password leaves the current one untouched.
+                if (filled($password)) {
+                    $existing->update(['password' => $this->passwordFrom($password)]);
+                }
+
+                return ['status' => 'updated', 'hashed' => $hashed];
+            }
+
+            User::create($attributes + [
+                'email' => $email,
+                'password' => $this->passwordFrom($password),
+            ]);
+
+            return ['status' => 'created', 'hashed' => $hashed];
+        });
     }
 
     /**
@@ -197,7 +258,7 @@ class LecturerController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:150'],
             'email' => ['required', 'email', 'max:180', 'unique:users,email'.($lecturer ? ','.$lecturer->id : '')],
-            'staff_id' => ['nullable', 'string', 'max:30', 'unique:users,staff_id'.($lecturer ? ','.$lecturer->id : '')],
+            'staff_id' => ['required', 'string', 'max:30', 'unique:users,staff_id'.($lecturer ? ','.$lecturer->id : '')],
             'department_id' => ['nullable', 'exists:departments,id'],
             'phone' => ['nullable', 'string', 'max:30'],
             'status' => ['nullable', 'in:active,inactive'],

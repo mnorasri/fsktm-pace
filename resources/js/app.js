@@ -113,6 +113,15 @@
         });
 
         /* ------------------------------------------------------------
+         * Import summary alert dismiss
+         * ---------------------------------------------------------- */
+        document.querySelectorAll('[data-import-report-close]').forEach((button) => {
+            button.addEventListener('click', () => {
+                button.closest('[data-import-report]')?.remove();
+            });
+        });
+
+        /* ------------------------------------------------------------
          * Reusable edit modals — populate fields from data-* attributes
          * ---------------------------------------------------------- */
         document.querySelectorAll('[data-edit]').forEach((trigger) => {
@@ -177,9 +186,12 @@
 
         /* ------------------------------------------------------------
          * Keep the scroll position across full-page form submissions.
-         * Forms opt in with data-scroll-keep; auto-submit dropdowns
-         * (study plan, admin filters) always remember it. Only the
-         * path is compared, so filter query strings may change freely.
+         * Every form that changes something (POST/PUT/PATCH/DELETE) —
+         * delete, update, create, import, reset password — remembers
+         * where the user was, so the page reload after the redirect
+         * does not jump to the top. Forms opted in with data-scroll-keep
+         * always remember it. Only the path is compared, so filter
+         * query strings may change freely.
          * ---------------------------------------------------------- */
         const SCROLL_KEY = 'pace:scroll-restore';
         const currentPath = window.location.pathname;
@@ -192,22 +204,37 @@
             }
         };
 
-        document.querySelectorAll('form[data-scroll-keep]').forEach((form) => {
-            form.addEventListener('submit', rememberScroll);
-        });
+        // Re-runnable so content swapped in via AJAX (e.g. the advisor's
+        // supervisee panel) keeps the same behaviour as the initial page.
+        window.bindDynamicBehaviours = (root = document) => {
+            root.querySelectorAll('form').forEach((form) => {
+                if (form.dataset.paceScrollKeepBound === '1') return;
+                form.dataset.paceScrollKeepBound = '1';
 
-        /* ------------------------------------------------------------
-         * Auto-submit filter/sort selects. form.submit() does not fire
-         * the submit event, so remember the position here ourselves —
-         * picking from a dropdown reloads without jumping to the top.
-         * ---------------------------------------------------------- */
-        document.querySelectorAll('[data-auto-submit]').forEach((el) => {
-            el.addEventListener('change', () => {
-                const form = el.closest('form');
-                rememberScroll();
-                form?.submit();
+                form.addEventListener('submit', () => {
+                    const method = (form.getAttribute('method') || 'GET').toUpperCase();
+
+                    // GET forms (filters, searches) normally start at the top;
+                    // they only keep the position when explicitly opted in.
+                    if (method === 'GET' && !form.hasAttribute('data-scroll-keep')) return;
+
+                    rememberScroll();
+                });
             });
-        });
+
+            root.querySelectorAll('[data-auto-submit]').forEach((el) => {
+                if (el.dataset.paceAutoSubmitBound === '1') return;
+                el.dataset.paceAutoSubmitBound = '1';
+
+                el.addEventListener('change', () => {
+                    const form = el.closest('form');
+                    rememberScroll();
+                    form?.submit();
+                });
+            });
+        };
+
+        window.bindDynamicBehaviours();
 
         let pending = null;
         try {

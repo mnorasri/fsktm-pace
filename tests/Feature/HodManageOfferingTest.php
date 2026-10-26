@@ -38,8 +38,8 @@ function makeOfferingWithPakGroups(): array
     ]);
 
     $hod = User::factory()->create(['role' => 'advisor', 'is_hod' => true]);
-    $norasri = User::factory()->create(['role' => 'advisor', 'name' => 'Prof. Norasri']);
-    $nurezayana = User::factory()->create(['role' => 'advisor', 'name' => 'Dr. Nurezayana']);
+    $norasri = User::factory()->create(['role' => 'advisor', 'name' => 'Prof. Norasri', 'staff_id' => 'norasri']);
+    $nurezayana = User::factory()->create(['role' => 'advisor', 'name' => 'Dr. Nurezayana', 'staff_id' => 'nurezayana']);
 
     $offering = Offering::create([
         'course_id' => $course->id, 'session' => '2025/2026', 'semester' => '1',
@@ -52,7 +52,7 @@ function makeOfferingWithPakGroups(): array
             'role' => 'student',
             'program_id' => $program->id,
             'plan_id' => $plan->id,
-            'advisor_id' => $advisor->id,
+            'advisor_id' => $advisor->staff_id,
         ]);
 
         PreRegistration::create([

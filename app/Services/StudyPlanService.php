@@ -58,7 +58,7 @@ class StudyPlanService
         return Course::with('courseType')
             ->where('course_plan_id', $student->plan_id)
             ->whereHas('courseType', fn ($query) => $query->where('code', CourseType::ELECTIVE_COURSE))
-            ->orderBy('code')
+            ->orderBy('course_code')
             ->get();
     }
 
@@ -156,7 +156,7 @@ class StudyPlanService
         return Course::where('course_plan_id', $student->plan_id)
             ->whereNotNull('alternative_group')
             ->where('alternative_group', '!=', '')
-            ->orderBy('code')
+            ->orderBy('course_code')
             ->get()
             ->groupBy('alternative_group');
     }
@@ -259,7 +259,7 @@ class StudyPlanService
         // semesters sit in Semester 1 of the year, even ones in Semester 2.
         $slotted = array_filter(array_map(fn (array $row) => $row['course']?->id, $candidates));
 
-        foreach ($plan->courses()->with('courseType')->orderBy('semester')->orderBy('code')->get() as $course) {
+        foreach ($plan->courses()->with('courseType')->orderBy('semester')->orderBy('course_code')->get() as $course) {
             if (in_array($course->id, $slotted, true)) {
                 continue;
             }

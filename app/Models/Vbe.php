@@ -13,6 +13,6 @@ class Vbe extends Model
 
     public function courses(): HasMany
     {
-        return $this->hasMany(Course::class);
+        return $this->hasMany(Course::class, 'vbe_ept_code', 'code');
     }
 }

@@ -150,15 +150,15 @@ class PaceSeeder extends Seeder
             $isGeneral = in_array($c[3], ['MPU', 'UNIVERSITY'], true);
 
             $course = Course::create([
-                'code' => $code,
-                'name' => $c[0],
-                'credits' => $c[1],
+                'course_code' => $code,
+                'course_name_en' => $c[0],
+                'credit_hours' => $c[1],
                 'department_id' => $departments[$c[2]]->id,
                 'program_id' => $isGeneral ? null : $programByDept[$c[2]],
-                'course_type_id' => $types[$c[3]]->id,
-                'mqf_sc_id' => $mqfs[$c[4]]->id,
-                'vbe_id' => $vbes[$c[5]]->id,
-                'prerequisites' => $c[6],
+                'course_type_code' => $types[$c[3]]->code,
+                'sc_code' => $mqfs[$c[4]]->code,
+                'vbe_ept_code' => $vbes[$c[5]]->code,
+                'pre_requisite' => $c[6],
                 'synopsis' => $c[0].' focuses on the core concepts, tools and practices required by the programme.',
             ]);
 
@@ -188,7 +188,7 @@ class PaceSeeder extends Seeder
                     'year' => $year,
                     'semester' => $semester,
                     'category' => 'required',
-                    'credits' => $courses[$code]->credits,
+                    'credits' => $courses[$code]->credit_hours,
                 ]);
             }
 
@@ -228,7 +228,7 @@ class PaceSeeder extends Seeder
                     'year' => intdiv($i, 2) + 1,
                     'semester' => ($i % 2) + 1,
                     'category' => 'required',
-                    'credits' => $courses[$seedCode]->credits,
+                    'credits' => $courses[$seedCode]->credit_hours,
                 ]);
             }
         }
@@ -239,7 +239,7 @@ class PaceSeeder extends Seeder
         $admin = User::create([
             'name' => 'System Administrator',
             'email' => 'admin@fsktm.test',
-            'password' => Hash::make('password'),
+            'password' => Hash::make('R@hsi4'),
             'role' => User::ROLE_ADMIN,
             'phone' => '07-5532000',
         ]);
@@ -247,7 +247,7 @@ class PaceSeeder extends Seeder
         $hodCs = User::create([
             'name' => 'Dr. Faridah binti Hassan',
             'email' => 'hod.cs@fsktm.test',
-            'password' => Hash::make('password'),
+            'password' => Hash::make('R@hsi4'),
             'role' => User::ROLE_ADVISOR,
             'staff_id' => 'HOD001',
             'department_id' => $departments['CS']->id,
@@ -257,7 +257,7 @@ class PaceSeeder extends Seeder
         $advisorCs = User::create([
             'name' => 'Dr. Ahmad Zaki',
             'email' => 'advisor.cs@fsktm.test',
-            'password' => Hash::make('password'),
+            'password' => Hash::make('R@hsi4'),
             'role' => User::ROLE_ADVISOR,
             'staff_id' => 'LEC001',
             'department_id' => $departments['CS']->id,
@@ -266,7 +266,7 @@ class PaceSeeder extends Seeder
         $advisorIs = User::create([
             'name' => 'Ms. Nurul Aini',
             'email' => 'advisor.is@fsktm.test',
-            'password' => Hash::make('password'),
+            'password' => Hash::make('R@hsi4'),
             'role' => User::ROLE_ADVISOR,
             'staff_id' => 'LEC002',
             'department_id' => $departments['IS']->id,
@@ -275,7 +275,7 @@ class PaceSeeder extends Seeder
         $advisorMm = User::create([
             'name' => 'Mr. Hafiz Rahman',
             'email' => 'advisor.mm@fsktm.test',
-            'password' => Hash::make('password'),
+            'password' => Hash::make('R@hsi4'),
             'role' => User::ROLE_ADVISOR,
             'staff_id' => 'LEC003',
             'department_id' => $departments['MM']->id,
@@ -295,13 +295,13 @@ class PaceSeeder extends Seeder
             $students->push(User::create([
                 'name' => $def['name'],
                 'email' => $def['email'],
-                'password' => Hash::make('password'),
+                'password' => Hash::make('R@hsi4'),
                 'role' => User::ROLE_STUDENT,
                 'student_id' => $def['sid'],
                 'department_id' => $prog['program']->department_id,
                 'program_id' => $prog['program']->id,
                 'plan_id' => $prog['plan']->id,
-                'advisor_id' => $def['advisor']->id,
+                'advisor_id' => $def['advisor']->staff_id,
                 'plan_status' => $i === 0 ? 'submitted' : 'draft',
                 'plan_submitted_at' => $i === 0 ? now()->subDays(2) : null,
             ]));

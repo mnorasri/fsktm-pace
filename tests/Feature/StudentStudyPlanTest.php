@@ -174,7 +174,7 @@ test('industrial training may be moved into either semester', function () {
 
     $training = Course::create([
         'code' => 'TST 41812', 'name' => 'Industrial Training', 'credits' => 12,
-        'semester' => 7, 'course_plan_id' => $plan->id, 'course_type_id' => $type->id,
+        'semester' => 7, 'course_plan_id' => $plan->id, 'course_type_code' => $type->code,
     ]);
 
     $this->actingAs($student)->get(route('student.study-plan'))->assertOk();

@@ -4,7 +4,6 @@
 
 @php
     $deptOptions = $departments->map(fn ($d) => ['value' => $d->id, 'label' => $d->code.' — '.$d->name])->all();
-    $programOptions = $programs->map(fn ($p) => ['value' => $p->id, 'label' => $p->code.' — '.$p->name])->all();
 
     $sections = [
         'departments' => [
@@ -30,20 +29,6 @@
                 ['name' => 'level', 'label' => 'Level', 'type' => 'text'],
                 ['name' => 'duration_years', 'label' => 'Duration (years)', 'type' => 'number', 'required' => true, 'step' => '0.5', 'min' => '1', 'max' => '8'],
                 ['name' => 'total_credits', 'label' => 'Total Credits', 'type' => 'number', 'required' => true],
-            ],
-        ],
-        'course-plans' => [
-            'title' => 'Course Plans',
-            'subtitle' => 'Curriculum plans per programme',
-            'icon' => 'layers',
-            'items' => $plans,
-            'fields' => [
-                ['name' => 'program_id', 'label' => 'Programme', 'type' => 'select', 'options' => $programOptions],
-                ['name' => 'code', 'label' => 'Plan Code', 'type' => 'text', 'required' => true],
-                ['name' => 'name', 'label' => 'Plan Name', 'type' => 'text', 'required' => true, 'full' => true],
-                ['name' => 'version', 'label' => 'Version', 'type' => 'text'],
-                ['name' => 'total_credits', 'label' => 'Total Credits', 'type' => 'number'],
-                ['name' => 'description', 'label' => 'Description', 'type' => 'textarea', 'full' => true],
             ],
         ],
         'course-types' => [

@@ -2,6 +2,7 @@
 
 use App\Models\Course;
 use App\Models\CoursePlan;
+use App\Models\Department;
 use App\Models\Program;
 use App\Models\StudyPlanEntry;
 use App\Models\User;
@@ -42,13 +43,13 @@ function makeAdvisorWithAdvisee(): array
         'semester' => 2, 'course_plan_id' => $plan->id, 'prerequisites' => 'ADV 30103',
     ]);
 
-    $advisor = User::factory()->create(['role' => 'advisor']);
+    $advisor = User::factory()->create(['role' => 'advisor', 'staff_id' => 'adv-odd']);
 
     $student = User::factory()->create([
         'role' => 'student',
         'program_id' => $program->id,
         'plan_id' => $plan->id,
-        'advisor_id' => $advisor->id,
+        'advisor_id' => $advisor->staff_id,
         'plan_status' => 'submitted',
     ]);
 
@@ -78,7 +79,9 @@ function makeAdvisorWithAdvisee(): array
 test('the advisor dashboard shows a supervisee plan as a per-year odd / even grid', function () {
     [$advisor, $student] = makeAdvisorWithAdvisee();
 
-    $response = $this->actingAs($advisor)->get(route('advisor.dashboard'))->assertOk();
+    $response = $this->actingAs($advisor)
+        ->get(route('advisor.dashboard', ['student' => $student->id, 'tab' => 'plan']))
+        ->assertOk();
 
     $response->assertSee($student->name)
         ->assertSee('Year 1')
@@ -101,7 +104,7 @@ test('the advisor dashboard shows a supervisee plan as a per-year odd / even gri
     // course — Year 2 Semester 2 has none.
     expect(substr_count($html, 'Semester 1</p>'))->toBe(2)
         ->and(substr_count($html, 'Semester 2</p>'))->toBe(2)
-        ->and(substr_count($html, 'rounded-xl border border-slate-200/70 bg-slate-50/60 p-3'))->toBe(4)
+        ->and(substr_count($html, 'data-plan-entry'))->toBe(4)
         ->and($html)->toContain('ADV 10103 · Odd Course')
         ->and($html)->toContain('ADV 20203 · Needs A Later Course')
         ->and($html)->toContain('No courses in this term');
@@ -114,14 +117,51 @@ test('a supervisee who has not built a plan falls back to the empty state', func
         'role' => 'student',
         'program_id' => $student->program_id,
         'plan_id' => $student->plan_id,
-        'advisor_id' => $advisor->id,
+        'advisor_id' => $advisor->staff_id,
     ]);
 
-    $response = $this->actingAs($advisor)->get(route('advisor.dashboard'))->assertOk();
-
-    // The supervisee with a plan gets the grid, the other one the placeholder.
-    $response->assertSee($other->name)
-        ->assertSee('This student has not built a study plan yet.')
+    // The supervisee with a plan gets the grid …
+    $this->actingAs($advisor)
+        ->get(route('advisor.dashboard', ['student' => $student->id, 'tab' => 'plan']))
+        ->assertOk()
         ->assertSee('2 course(s) · 6 cr')
         ->assertSee('1 course(s) · 3 cr');
+
+    // … the other one the placeholder.
+    $this->actingAs($advisor)
+        ->get(route('advisor.dashboard', ['student' => $other->id, 'tab' => 'plan']))
+        ->assertOk()
+        ->assertSee($other->name)
+        ->assertSee('This student has not built a study plan yet.');
+});
+
+test('a head of department sees only their own advisees, not the department', function () {
+    [$advisor] = makeAdvisorWithAdvisee();
+
+    $department = Department::create(['code' => 'HOD', 'name' => 'HoD Department']);
+
+    $hod = User::factory()->create([
+        'role' => 'advisor',
+        'is_hod' => true,
+        'department_id' => $department->id,
+        'staff_id' => 'hod-advisee',
+    ]);
+
+    $own = User::factory()->create([
+        'role' => 'student',
+        'department_id' => $department->id,
+        'advisor_id' => 'hod-advisee',
+    ]);
+
+    $colleague = User::factory()->create([
+        'role' => 'student',
+        'department_id' => $department->id,
+        'advisor_id' => $advisor->staff_id,
+    ]);
+
+    $this->actingAs($hod)
+        ->get(route('advisor.dashboard'))
+        ->assertOk()
+        ->assertSee($own->name)
+        ->assertDontSee($colleague->name);
 });

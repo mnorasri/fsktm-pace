@@ -27,9 +27,9 @@ class PreRegistrationController extends Controller
 
         [$session, $semester] = $this->activeTerm();
 
-        // Course registration only opens once the advisor has approved the
-        // study plan it is built from.
-        $planApproved = $student->plan_status === 'approved';
+        // Course registration is open regardless of study-plan approval: a student
+        // may pre-register for offered courses straight away.
+        $planApproved = true;
 
         // The term's pre-registration sits with the advisor: while it is with
         // them (or already approved) the student cannot change it.
@@ -146,12 +146,6 @@ class PreRegistrationController extends Controller
             ]);
         }
 
-        if ($student->plan_status !== 'approved') {
-            return back()->withErrors([
-                'offering' => 'Your study plan must be approved by your advisor before you can register for courses.',
-            ]);
-        }
-
         if ($offering->session !== $session || $offering->semester !== $semester || ! $offering->is_offered) {
             return back()->withErrors(['offering' => 'That course is not offered in the active term.']);
         }
@@ -211,7 +205,7 @@ class PreRegistrationController extends Controller
         abort_if(
             $submission?->isLocked(),
             403,
-            $submission->status === RegistrationSubmission::STATUS_APPROVED
+            $submission?->status === RegistrationSubmission::STATUS_APPROVED
                 ? 'Your pre-registration has been approved and can no longer be changed.'
                 : 'Your pre-registration is awaiting your advisor\'s approval and can no longer be changed.',
         );
@@ -230,12 +224,6 @@ class PreRegistrationController extends Controller
         $student = auth()->user();
 
         [$session, $semester] = $this->activeTerm();
-
-        if ($student->plan_status !== 'approved') {
-            return back()->withErrors([
-                'registration' => 'Your study plan must be approved by your advisor before you can submit a pre-registration.',
-            ]);
-        }
 
         $submission = RegistrationSubmission::forTerm($student, $session, $semester);
 
