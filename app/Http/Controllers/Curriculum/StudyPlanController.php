@@ -24,9 +24,12 @@ class StudyPlanController extends Controller
 
     public function index(Request $request): View
     {
+        $programIds = auth()->user()->curriculumProgramIds();
+
         $plans = CoursePlan::query()
             ->with('program.department')
             ->withCount(['planCourses', 'students'])
+            ->when($programIds !== null, fn ($q) => $q->whereIn('program_id', $programIds))
             ->when($request->filled('program_id'), fn ($q) => $q->where('program_id', $request->integer('program_id')))
             ->when($request->filled('search'), function ($q) use ($request) {
                 $term = '%'.$request->string('search').'%';
@@ -38,15 +41,23 @@ class StudyPlanController extends Controller
             ->paginate(15)
             ->withQueryString();
 
+        $programs = Program::query()
+            ->when($programIds !== null, fn ($q) => $q->whereIn('id', $programIds))
+            ->orderBy('code')
+            ->get();
+
         return view('curriculum.study-plans', [
             'plans' => $plans,
-            'programs' => Program::orderBy('code')->get(),
+            'programs' => $programs,
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
         $data = $this->validated($request);
+
+        $programId = Program::where('code', $data['programme_code'])->value('id');
+        $this->authorizeProgrammeId($programId);
 
         CoursePlan::create($this->attributes($data));
 
@@ -55,6 +66,8 @@ class StudyPlanController extends Controller
 
     public function update(Request $request, CoursePlan $studyPlan): RedirectResponse
     {
+        $this->authorizeStudyPlan($studyPlan);
+
         $data = $this->validated($request, $studyPlan);
 
         $studyPlan->update($this->attributes($data));
@@ -64,6 +77,8 @@ class StudyPlanController extends Controller
 
     public function destroy(CoursePlan $studyPlan): RedirectResponse
     {
+        $this->authorizeStudyPlan($studyPlan);
+
         $code = $studyPlan->code;
         $studyPlan->delete();
 
@@ -188,5 +203,42 @@ class StudyPlanController extends Controller
             'version' => $data['version'] ?? null,
             'total_semester' => $data['total_semester'] ?? null,
         ];
+    }
+
+    /**
+     * A Head of Program may only touch study plans belonging to programmes
+     * they actually head.
+     */
+    protected function authorizeStudyPlan(CoursePlan $plan): void
+    {
+        $user = auth()->user();
+
+        if ($user->isAdmin() || $user->isHod()) {
+            return;
+        }
+
+        abort_unless(
+            $user->isHeadOfProgram() && in_array($plan->program_id, $user->curriculumProgramIds() ?? [], true),
+            403,
+            'You may only manage study plans for programmes you head.'
+        );
+    }
+
+    /**
+     * Guard programme assignment for create operations.
+     */
+    protected function authorizeProgrammeId(?int $programId): void
+    {
+        $user = auth()->user();
+
+        if ($user->isAdmin() || $user->isHod()) {
+            return;
+        }
+
+        abort_unless(
+            $user->isHeadOfProgram() && in_array($programId, $user->curriculumProgramIds() ?? [], true),
+            403,
+            'You may only manage curriculum for programmes you head.'
+        );
     }
 }

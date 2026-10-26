@@ -110,6 +110,9 @@ test('a programme can be created, updated and deleted', function () {
 
     $program = Program::where('code', 'BIT')->firstOrFail();
 
+    // The Head of Program may only edit programmes they actually head.
+    $program->update(['head_of_program_id' => $context['hop']->id]);
+
     $this->actingAs($context['hop'])
         ->put(route('curriculum.programmes.update', $program), [
             'programme_code' => 'BIT',

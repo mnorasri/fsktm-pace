@@ -28,8 +28,11 @@ class CourseController extends Controller
 
     public function index(Request $request): View
     {
+        $programIds = auth()->user()->curriculumProgramIds();
+
         $courses = Course::query()
             ->with(['courseType', 'mqfSc', 'vbe', 'sdg'])
+            ->when($programIds !== null, fn ($q) => $q->whereIn('program_id', $programIds))
             ->when($request->filled('course_type_code'), fn ($q) => $q->where('course_type_code', $request->string('course_type_code')))
             ->when($request->filled('search'), function ($q) use ($request) {
                 $term = '%'.$request->string('search').'%';
@@ -69,6 +72,8 @@ class CourseController extends Controller
 
     public function update(Request $request, Course $course): RedirectResponse
     {
+        $this->authorizeCourse($course);
+
         $data = $this->validated($request, $course);
 
         $course->update($this->attributes($data));
@@ -78,6 +83,8 @@ class CourseController extends Controller
 
     public function destroy(Course $course): RedirectResponse
     {
+        $this->authorizeCourse($course);
+
         $code = $course->course_code;
         $course->delete();
 
@@ -257,5 +264,25 @@ class CourseController extends Controller
         }
 
         return $resolved;
+    }
+
+    /**
+     * A Head of Program may only touch courses belonging to programmes
+     * they actually head.
+     */
+    protected function authorizeCourse(Course $course): void
+    {
+        $user = auth()->user();
+
+        if ($user->isAdmin() || $user->isHod()) {
+            return;
+        }
+
+        abort_unless(
+            $user->isHeadOfProgram() && $course->program_id !== null
+                && in_array($course->program_id, $user->curriculumProgramIds() ?? [], true),
+            403,
+            'You may only manage courses for programmes you head.'
+        );
     }
 }

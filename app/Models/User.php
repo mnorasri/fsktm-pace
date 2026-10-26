@@ -78,6 +78,28 @@ class User extends Authenticatable
         return $this->isAdvisor() && $this->headedPrograms()->exists();
     }
 
+    /**
+     * Programme IDs this user may manage in the curriculum area.
+     *
+     * Administrators and Heads of Department see everything (null = no
+     * filter). A Head of Program is restricted to the programmes they
+     * actually head. Anyone else gets an empty list (nothing visible).
+     *
+     * @return array<int>|null
+     */
+    public function curriculumProgramIds(): ?array
+    {
+        if ($this->isAdmin() || $this->isHod()) {
+            return null;
+        }
+
+        if ($this->isHeadOfProgram()) {
+            return $this->headedPrograms()->pluck('id')->all();
+        }
+
+        return [];
+    }
+
     public function roleLabel(): string
     {
         return match (true) {

@@ -24,9 +24,12 @@ class ProgrammeController extends Controller
 
     public function index(Request $request): View
     {
+        $programIds = auth()->user()->curriculumProgramIds();
+
         $programs = Program::query()
             ->with('department')
             ->withCount(['plans', 'courses'])
+            ->when($programIds !== null, fn ($q) => $q->whereIn('id', $programIds))
             ->when($request->filled('department_id'), fn ($q) => $q->where('department_id', $request->integer('department_id')))
             ->when($request->filled('search'), function ($q) use ($request) {
                 $term = '%'.$request->string('search').'%';
@@ -55,6 +58,8 @@ class ProgrammeController extends Controller
 
     public function update(Request $request, Program $program): RedirectResponse
     {
+        $this->authorizeProgramme($program);
+
         $data = $this->validated($request, $program);
 
         $program->update($this->attributes($data));
@@ -64,6 +69,8 @@ class ProgrammeController extends Controller
 
     public function destroy(Program $program): RedirectResponse
     {
+        $this->authorizeProgramme($program);
+
         $code = $program->code;
         $program->delete();
 
@@ -198,5 +205,23 @@ class ProgrammeController extends Controller
             'duration_years' => $data['duration_years'] ?? null,
             'total_credits' => $data['total_credits'] ?? null,
         ], fn ($value) => $value !== null);
+    }
+
+    /**
+     * A Head of Program may only touch programmes they actually head.
+     */
+    protected function authorizeProgramme(Program $program): void
+    {
+        $user = auth()->user();
+
+        if ($user->isAdmin() || $user->isHod()) {
+            return;
+        }
+
+        abort_unless(
+            $user->isHeadOfProgram() && $program->head_of_program_id === $user->id,
+            403,
+            'You may only manage programmes you head.'
+        );
     }
 }

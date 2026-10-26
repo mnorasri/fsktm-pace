@@ -32,8 +32,11 @@ class StudyPlanDetailController extends Controller
 
     public function index(Request $request): View
     {
+        $programIds = auth()->user()->curriculumProgramIds();
+
         $details = PlanCourse::query()
             ->with(['plan.program', 'course.courseType'])
+            ->when($programIds !== null, fn ($q) => $q->whereHas('plan', fn ($inner) => $inner->whereIn('program_id', $programIds)))
             ->when($request->filled('plan'), function ($q) use ($request) {
                 $q->whereHas('plan', fn ($inner) => $inner->where('code', $request->string('plan')));
             })
@@ -55,16 +58,29 @@ class StudyPlanDetailController extends Controller
             ->paginate(25)
             ->withQueryString();
 
+        $plans = CoursePlan::query()
+            ->with('program')
+            ->when($programIds !== null, fn ($q) => $q->whereIn('program_id', $programIds))
+            ->orderBy('code')
+            ->get();
+
+        $courses = Course::query()
+            ->when($programIds !== null, fn ($q) => $q->whereIn('program_id', $programIds))
+            ->orderBy('course_code')
+            ->get(['id', 'course_code', 'course_name_en', 'credit_hours']);
+
         return view('curriculum.study-plan-details', [
             'details' => $details,
-            'plans' => CoursePlan::with('program')->orderBy('code')->get(),
-            'courses' => Course::orderBy('course_code')->get(['id', 'course_code', 'course_name_en', 'credit_hours']),
+            'plans' => $plans,
+            'courses' => $courses,
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
         [$plan, $course, $semester] = $this->validated($request);
+
+        $this->authorizePlanCoursePlan($plan);
 
         PlanCourse::create($this->attributes($plan, $course, $semester));
 
@@ -73,6 +89,8 @@ class StudyPlanDetailController extends Controller
 
     public function update(Request $request, PlanCourse $detail): RedirectResponse
     {
+        $this->authorizePlanCourse($detail);
+
         [$plan, $course, $semester] = $this->validated($request, $detail);
 
         $detail->update($this->attributes($plan, $course, $semester));
@@ -82,6 +100,8 @@ class StudyPlanDetailController extends Controller
 
     public function destroy(PlanCourse $detail): RedirectResponse
     {
+        $this->authorizePlanCourse($detail);
+
         $label = $detail->course?->code ?? $detail->placeholder_key ?? 'Study plan row';
 
         $detail->delete();
@@ -246,5 +266,35 @@ class StudyPlanDetailController extends Controller
             $type === 'CT01' => 'university',
             default => 'required',
         };
+    }
+
+    protected function authorizePlanCourse(PlanCourse $detail): void
+    {
+        $user = auth()->user();
+
+        if ($user->isAdmin() || $user->isHod()) {
+            return;
+        }
+
+        abort_unless(
+            $user->isHeadOfProgram() && $detail->plan && in_array($detail->plan->program_id, $user->curriculumProgramIds() ?? [], true),
+            403,
+            'You may only manage study plan rows for programmes you head.'
+        );
+    }
+
+    protected function authorizePlanCoursePlan(CoursePlan $plan): void
+    {
+        $user = auth()->user();
+
+        if ($user->isAdmin() || $user->isHod()) {
+            return;
+        }
+
+        abort_unless(
+            $user->isHeadOfProgram() && in_array($plan->program_id, $user->curriculumProgramIds() ?? [], true),
+            403,
+            'You may only manage study plan rows for programmes you head.'
+        );
     }
 }
