@@ -1,3 +1,15 @@
+<style>
+    .supervisee-tabs { position: relative; }
+    .supervisee-tabs > input[type="radio"] { position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0; }
+    .supervisee-tabs .tab-labels { display: flex; gap: 0.25rem; border-bottom: 1px solid #e2e8f0; margin-bottom: 1rem; }
+    .supervisee-tabs .tab-labels label { display: inline-flex; align-items: center; gap: 0.375rem; cursor: pointer; padding: 0.5rem 0.75rem; font-size: 0.75rem; font-weight: 600; color: #64748b; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.15s ease, border-color 0.15s ease; }
+    .supervisee-tabs .tab-labels label:hover { color: #334155; }
+    .supervisee-tabs > input:nth-of-type(1):checked ~ .tab-labels label:nth-of-type(1),
+    .supervisee-tabs > input:nth-of-type(2):checked ~ .tab-labels label:nth-of-type(2) { color: #4f46e5; border-bottom-color: #6366f1; }
+    .supervisee-tabs .tab-panel { display: none; }
+    .supervisee-tabs > input:nth-of-type(1):checked ~ .panel-pre { display: block; }
+    .supervisee-tabs > input:nth-of-type(2):checked ~ .panel-plan { display: block; }
+</style>
 @php
     $planTone = ['approved' => 'emerald', 'submitted' => 'amber', 'rejected' => 'rose', 'draft' => 'slate'];
     $student = $selected['student'] ?? null;
