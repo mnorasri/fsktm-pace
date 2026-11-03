@@ -76,7 +76,6 @@ test('manage offering totals the students registered by each PAK group', functio
         ->assertSee('Course Name')
         ->assertSee('Registered by PAK group')
         ->assertSee('Coordinator')
-        ->assertSee('Whole course')
         // The students of each PAK group next to the group itself.
         ->assertSee($norasri->name)
         ->assertSee('2 student(s)')
@@ -93,7 +92,7 @@ test('a PAK group is given a section from 01 to 10', function () {
     $html = $this->actingAs($hod)->get(route('advisor.offering.manage'))->assertOk()->getContent();
 
     // The section select of the first PAK group row.
-    $options = Str::before(Str::after($html, 'aria-label="Section for '.$norasri->name.'"'), '</select>');
+    $options = Str::before(Str::after($html, 'aria-label="New section number"'), '</select>');
 
     foreach (['01', '05', '10'] as $section) {
         expect($options)->toContain('value="'.$section.'"');
@@ -174,7 +173,6 @@ test('the HoD can give one PAK group its own section and lecturer', function () 
     $this->actingAs($hod)
         ->get(route('advisor.offering.manage'))
         ->assertOk()
-        ->assertSee('value="03"', false)
         ->assertSee($lecturer->name);
 });
 
@@ -196,7 +194,13 @@ test('a coordinator is chosen from the lecturers assigned to the course', functi
         ->not->toContain($nurezayana->name);
 
     // The offering's own lecturer is a candidate.
-    $offering->update(['lecturer_id' => $norasri->id]);
+    $this->actingAs($hod)
+        ->put(route('advisor.offering.group', $offering), [
+            'advisor_id' => $norasri->id,
+            'section' => '01',
+            'lecturer_id' => $norasri->id,
+        ])
+        ->assertSessionHasNoErrors();
 
     expect($coordinatorOptions())
         ->toContain($norasri->name)

@@ -60,6 +60,8 @@
                 $hasSpecial = $placed->contains(fn ($course) => (int) $course->plan_semester === 3);
                 $semesters = $hasSpecial ? [1, 2, 3] : [1, 2];
                 $offeredCount = $plan->courses->filter(fn ($course) => isset($existing[$course->id]))->count();
+                // (Elective-option CT07A slots are shown as labels only; the
+                //  actual elective courses (CT07) are toggled in the panel below.)
             @endphp
 
             <x-card pad title="{{ $plan->code }}" subtitle="{{ $plan->name }} · {{ $plan->program?->name }}">
@@ -113,9 +115,23 @@
 
                                             <div class="space-y-2.5">
                                                 @forelse ($semesterCourses as $course)
-                                                    <x-offering-toggle :course="$course" :plan="$plan"
-                                                        :offered="isset($existing[$course->id])"
-                                                        :year="$year" />
+                                                    @if (mb_strtoupper((string) $course->course_type_code) === 'CT07A')
+                                                        <div class="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-3.5">
+                                                            <span class="min-w-0 flex-1">
+                                                                <span class="block truncate text-sm font-semibold text-slate-800">
+                                                                    {{ $course->code }} · {{ $course->name }}
+                                                                </span>
+                                                                <span class="block text-xs text-slate-400">
+                                                                    Elective option slot · {{ $course->credits }} cr
+                                                                </span>
+                                                            </span>
+                                                            <x-badge tone="slate">Slot</x-badge>
+                                                        </div>
+                                                    @else
+                                                        <x-offering-toggle :course="$course" :plan="$plan"
+                                                            :offered="isset($existing[$course->id])"
+                                                            :year="$year" />
+                                                    @endif
                                                 @empty
                                                     <p class="rounded-2xl border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-400">
                                                         No courses in this semester
@@ -151,8 +167,22 @@
 
                             <div class="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">
                                 @foreach ($withoutTerm as $course)
-                                    <x-offering-toggle :course="$course" :plan="$plan"
-                                        :offered="isset($existing[$course->id])" />
+                                    @if (mb_strtoupper((string) $course->course_type_code) === 'CT07A')
+                                        <div class="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-3.5">
+                                            <span class="min-w-0 flex-1">
+                                                <span class="block truncate text-sm font-semibold text-slate-800">
+                                                    {{ $course->code }} · {{ $course->name }}
+                                                </span>
+                                                <span class="block text-xs text-slate-400">
+                                                    Elective option slot · {{ $course->credits }} cr
+                                                </span>
+                                            </span>
+                                            <x-badge tone="slate">Slot</x-badge>
+                                        </div>
+                                    @else
+                                        <x-offering-toggle :course="$course" :plan="$plan"
+                                            :offered="isset($existing[$course->id])" />
+                                    @endif
                                 @endforeach
                             </div>
                         </div>
@@ -179,8 +209,22 @@
 
                             <div class="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">
                                 @foreach ($electives as $course)
-                                    <x-offering-toggle :course="$course" :plan="$plan"
-                                        :offered="isset($existing[$course->id])" />
+                                    @if (mb_strtoupper((string) $course->course_type_code) === 'CT07A')
+                                        <div class="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-3.5">
+                                            <span class="min-w-0 flex-1">
+                                                <span class="block truncate text-sm font-semibold text-slate-800">
+                                                    {{ $course->code }} · {{ $course->name }}
+                                                </span>
+                                                <span class="block text-xs text-slate-400">
+                                                    Elective option slot · {{ $course->credits }} cr
+                                                </span>
+                                            </span>
+                                            <x-badge tone="slate">Slot</x-badge>
+                                        </div>
+                                    @else
+                                        <x-offering-toggle :course="$course" :plan="$plan"
+                                            :offered="isset($existing[$course->id])" />
+                                    @endif
                                 @endforeach
                             </div>
                         </div>

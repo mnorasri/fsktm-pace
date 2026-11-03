@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class PreRegistration extends Model
 {
     protected $fillable = [
-        'user_id', 'offering_id', 'session', 'semester',
+        'user_id', 'offering_id', 'section', 'session', 'semester',
         'credits', 'status', 'note', 'reviewed_by', 'reviewed_at',
     ];
 

@@ -8,6 +8,7 @@ use App\Models\CoursePlan;
 use App\Models\Department;
 use App\Models\Offering;
 use App\Models\OfferingGroup;
+use App\Models\OfferingSection;
 use App\Models\PreRegistration;
 use App\Models\Setting;
 use App\Models\User;
@@ -40,6 +41,10 @@ class HodOfferingController extends Controller
                 'course.department', 'lecturer', 'coordinator', 'adviseeGroup', 'program',
                 // The per-PAK-group sections of this offering, if any.
                 'groups.advisor', 'groups.lecturer',
+                // Standalone sections created in Step 1.
+                'sections.lecturer',
+                // Standalone sections created in Step 1.
+                'sections.lecturer',
             ])
             ->withCount([
                 'preRegistrations',
@@ -85,6 +90,13 @@ class HodOfferingController extends Controller
                 ->map(fn ($group) => [
                     'advisor' => $group->first()->student?->advisor,
                     'students' => $group->count(),
+                    'student_list' => $group->map(fn (PreRegistration $r) => [
+                        'id' => $r->student?->id,
+                        'name' => $r->student?->name,
+                        'matric' => $r->student?->student_id,
+                        'status' => $r->status,
+                        'section' => $r->section,
+                    ])->values(),
                 ])
                 ->sortByDesc('students')
                 ->values());
@@ -99,14 +111,16 @@ class HodOfferingController extends Controller
                 ->map(fn ($advisorId) => [
                     'advisor' => $byAdvisor[$advisorId]['advisor'],
                     'students' => $byAdvisor[$advisorId]['students'],
-                    'assignment' => $assigned->get($advisorId),
+                    'student_list' => $byAdvisor[$advisorId]['student_list'] ?? collect(),
+                    'assignments' => $assigned->get($advisorId, collect()),
                 ])
                 ->merge($assigned
                     ->reject(fn (OfferingGroup $group) => $byAdvisor->has($group->advisor_id))
                     ->map(fn (OfferingGroup $group) => [
                         'advisor' => $group->advisor,
                         'students' => 0,
-                        'assignment' => $group,
+                        'student_list' => collect(),
+                        'assignments' => collect([$group]),
                     ]))
                 ->sortByDesc('students')
                 ->values();
@@ -118,8 +132,9 @@ class HodOfferingController extends Controller
         // course — its own lecturer plus every PAK group's lecturer.
         $assignedLecturers = $offerings->mapWithKeys(fn (Offering $offering) => [
             $offering->id => $offering->groups
+                ->filter(fn (OfferingGroup $group) => filled($group->section))
                 ->pluck('lecturer')
-                ->push($offering->lecturer)
+                ->concat($offering->sections->pluck('lecturer'))
                 ->filter()
                 ->unique('id')
                 ->sortBy('name')
@@ -145,6 +160,10 @@ class HodOfferingController extends Controller
             'groupPanels' => $groupPanels,
             'assignedLecturers' => $assignedLecturers,
             'totalsByAdvisor' => $totalsByAdvisor,
+            'offeringSections' => OfferingSection::whereIn('offering_id', $offerings->pluck('id'))
+                ->orderBy('section')
+                ->get()
+                ->groupBy('offering_id'),
             // Sections 01–10 — the address a PAK group can be given.
             'sectionOptions' => collect(range(1, 10))
                 ->map(fn (int $number) => str_pad((string) $number, 2, '0', STR_PAD_LEFT)),
@@ -175,9 +194,113 @@ class HodOfferingController extends Controller
     }
 
     /**
-     * Course Offering Toggle Grid — the courses of each programme plan, split
-     * into an odd-semester column and an even-semester column.
+     * Create or update a standalone section for an offering.
      */
+    public function storeSection(Request $request, Offering $offering): RedirectResponse
+    {
+        $data = $request->validate([
+            'section' => ['required', 'string', 'max:10'],
+            'lecturer_id' => ['nullable', 'exists:users,id'],
+        ]);
+
+        OfferingSection::updateOrCreate(
+            ['offering_id' => $offering->id, 'section' => $data['section']],
+            ['lecturer_id' => $data['lecturer_id'] ?: null],
+        );
+
+        return back()->with('status', 'Section '.$data['section'].' saved for '.$offering->course->code.'.');
+    }
+
+    /**
+     * Remove a standalone section.
+     */
+    public function deleteSection(OfferingSection $section): RedirectResponse
+    {
+        $code = $section->offering?->course?->code;
+        $section->delete();
+
+        return back()->with('status', 'Section removed from '.$code.'.');
+    }
+
+    /**
+     * Randomly distribute the students of a PAK group across the sections
+     * the HoD has defined for the offering.
+     */
+    public function distributeSections(Request $request, Offering $offering): RedirectResponse
+    {
+        $data = $request->validate([
+            'advisor_id' => ['required', 'exists:users,id'],
+            'sections' => ['required', 'array', 'min:1'],
+            'sections.*' => ['required', 'string', 'max:10'],
+            'counts' => ['required', 'array'],
+            'counts.*' => ['required', 'integer', 'min:0'],
+        ]);
+
+        $advisorId = (int) $data['advisor_id'];
+        $sections = $data['sections'];
+        $counts = $data['counts'];
+
+        if (count($sections) !== count($counts)) {
+            return back()->withErrors(['counts' => 'Section and count lists must match.']);
+        }
+
+        $advisor = User::find($advisorId);
+        $registrations = PreRegistration::query()
+            ->where('offering_id', $offering->id)
+            ->whereHas('student', fn ($q) => $q->where('advisor_id', $advisor?->staff_id))
+            ->get();
+
+        $total = (int) array_sum($counts);
+        if ($total > $registrations->count()) {
+            return back()->withErrors(['counts' => 'Requested '.$total.' students but only '.$registrations->count().' registered.']);
+        }
+
+        $shuffled = $registrations->shuffle()->values();
+        $cursor = 0;
+
+        foreach ($sections as $i => $section) {
+            $n = (int) $counts[$i];
+            for ($k = 0; $k < $n && $cursor < $shuffled->count(); $k++, $cursor++) {
+                $shuffled[$cursor]->update(['section' => $section]);
+            }
+        }
+
+        return back()->with('status', $cursor.' student(s) distributed across '.count($sections).' section(s) for '.$offering->course->code.'.');
+    }
+
+    /**
+     * Merge two or more PAK groups into a single section + lecturer.
+     */
+    public function mergeGroups(Request $request, Offering $offering): RedirectResponse
+    {
+        $data = $request->validate([
+            'advisor_ids' => ['required', 'array', 'min:2'],
+            'advisor_ids.*' => ['required', 'exists:users,id'],
+            'section' => ['nullable', 'string', 'max:10'],
+            'lecturer_id' => ['nullable', 'exists:users,id'],
+        ]);
+
+        $section = $data['section'] ?: null;
+        $lecturerId = $data['lecturer_id'] ?: null;
+        $advisors = User::whereIn('id', $data['advisor_ids'])->get()->keyBy('id');
+
+        foreach ($data['advisor_ids'] as $advisorId) {
+            OfferingGroup::updateOrCreate(
+                ['offering_id' => $offering->id, 'advisor_id' => $advisorId],
+                ['section' => $section, 'lecturer_id' => $lecturerId],
+            );
+        }
+
+        $names = collect($data['advisor_ids'])
+            ->map(fn ($id) => $advisors->get($id)?->name)
+            ->filter()
+            ->implode(', ');
+
+        $label = $section ? 'Section '.$section : 'no section';
+
+        return back()->with('status', count($data['advisor_ids']).' PAK groups ('.$names.') merged into '.$label.' for '.$offering->course->code.'.');
+    }
+
     public function grid(Request $request): View
     {
         [$session, $semester] = $this->activeTerm();
@@ -413,7 +536,7 @@ class HodOfferingController extends Controller
     {
         [$session, $semester] = $this->activeTerm();
 
-        $offerings = Offering::with(['course', 'lecturer', 'coordinator', 'adviseeGroup'])
+        $offerings = Offering::with(['course', 'coordinator', 'groups', 'sections'])
             ->where('session', $session)
             ->where('semester', $semester)
             ->get()
@@ -423,23 +546,50 @@ class HodOfferingController extends Controller
 
         return Response::streamDownload(function () use ($offerings) {
             $out = fopen('php://output', 'w');
-            fputcsv($out, ['Course Code', 'Course Name', 'Section', 'Credits', 'Lecturer', 'Coordinator', 'PAK Group', 'Registered', 'Capacity', 'Day', 'Time', 'Venue']);
+            fputcsv($out, ['Course Code', 'Course Name', 'Section', 'Assigned Lecturer', 'Assigned Coordinator', 'Student Matric No', 'Student Advisor']);
 
             foreach ($offerings as $offering) {
-                fputcsv($out, [
-                    $offering->course->code,
-                    $offering->course->name,
-                    $offering->section,
-                    $offering->course->credits,
-                    $offering->lecturer?->name,
-                    $offering->coordinator?->name,
-                    $offering->adviseeGroup?->name,
-                    $offering->preRegistrations()->count(),
-                    $offering->capacity,
-                    $offering->day,
-                    $offering->time,
-                    $offering->venue,
-                ]);
+                // Lecturer lookup per section: prefer standalone OfferingSection,
+                // then fall back to the PAK group's OfferingGroup.
+                $lecturerBySection = [];
+                foreach ($offering->sections as $section) {
+                    $lecturerBySection[$section->section] = $section->lecturer?->name;
+                }
+                foreach ($offering->groups as $group) {
+                    if ($group->section && ! isset($lecturerBySection[$group->section])) {
+                        $lecturerBySection[$group->section] = $group->lecturer?->name;
+                    }
+                }
+
+                $registrations = $offering->preRegistrations()->with('student.advisor')->get();
+
+                if ($registrations->isEmpty()) {
+                    // Keep the course visible even with no registrations.
+                    fputcsv($out, [
+                        $offering->course->code,
+                        $offering->course->name,
+                        $offering->section,
+                        $lecturerBySection[$offering->section] ?? null,
+                        $offering->coordinator?->name,
+                        '',
+                        '',
+                    ]);
+
+                    continue;
+                }
+
+                foreach ($registrations as $registration) {
+                    $section = $registration->section ?: $offering->section;
+                    fputcsv($out, [
+                        $offering->course->code,
+                        $offering->course->name,
+                        $section,
+                        $lecturerBySection[$section] ?? null,
+                        $offering->coordinator?->name,
+                        $registration->student?->student_id,
+                        $registration->student?->advisor?->name,
+                    ]);
+                }
             }
 
             fclose($out);

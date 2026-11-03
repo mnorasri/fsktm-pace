@@ -44,7 +44,8 @@
     .btn-ghost,
     .btn-subtle,
     .btn-danger,
-    .btn-success {
+    .btn-success,
+    .btn-blue {
         @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition
             focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2
             disabled:cursor-not-allowed disabled:opacity-50;
@@ -72,6 +73,10 @@
 
     .btn-success {
         @apply bg-emerald-600 text-white hover:bg-emerald-700;
+    }
+
+    .btn-blue {
+        @apply bg-blue-600 text-white hover:bg-blue-700;
     }
 
     .btn-sm {

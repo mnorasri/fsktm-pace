@@ -64,4 +64,9 @@ class Offering extends Model
     {
         return $this->hasMany(OfferingGroup::class)->orderBy('advisor_id');
     }
+
+    public function sections(): HasMany
+    {
+        return $this->hasMany(OfferingSection::class)->orderBy('section');
+    }
 }

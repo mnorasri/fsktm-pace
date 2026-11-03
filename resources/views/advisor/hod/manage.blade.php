@@ -167,61 +167,104 @@
                                          courses no PAK group has registered for. --}}
                                     <td class="align-top!">
                                         <div class="w-[27rem] space-y-2">
-                                            <form method="POST" action="{{ route('advisor.offering.assign', $offering) }}" data-scroll-keep
-                                                class="grid grid-cols-[minmax(0,1fr)_5.5rem_minmax(0,1.4fr)_auto] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/70 p-2">
-                                                @csrf
-                                                @method('PUT')
-                                                <span class="truncate text-[11px] font-semibold uppercase tracking-wider text-slate-400"
-                                                    title="The course as a whole, before a PAK group has its own section">
-                                                    Whole course
-                                                </span>
-                                                <select name="section" class="select py-1.5 text-xs" aria-label="Section for the whole course">
-                                                    <option value="" title="No section">None</option>
-                                                    @foreach ($sectionChoices($offering->section) as $section)
-                                                        <option value="{{ $section }}" @selected($offering->section === $section)>{{ $section }}</option>
-                                                    @endforeach
-                                                </select>
-                                                <select name="lecturer_id" class="select py-1.5 text-xs" aria-label="Lecturer for the whole course">
-                                                    <option value="">— Lecturer —</option>
-                                                    @foreach ($advisors as $advisor)
-                                                        <option value="{{ $advisor->id }}" @selected($offering->lecturer_id === $advisor->id)>{{ $advisor->name }}</option>
-                                                    @endforeach
-                                                </select>
-                                                <button class="btn-subtle btn-sm">
-                                                    <x-icon name="check" class="size-3.5" /> Save
-                                                </button>
-                                            </form>
+                                            <details class="rounded-xl border border-brand-200 bg-brand-50/40 p-2" open>
+                                                <summary class="cursor-pointer list-none text-[11px] font-semibold text-brand-700">
+                                                    Step 1 - Create sections
+                                                </summary>
+                                                <div class="mt-2 space-y-2">
+                                                    <form method="POST" action="{{ route('advisor.offering.section.store', $offering) }}" data-scroll-keep
+                                                        class="flex flex-wrap items-center gap-2">
+                                                        @csrf
+                                                        <select name="section" class="select py-1.5 text-xs" aria-label="New section number">
+                                                            <option value="">None</option>
+                                                            @foreach ($sectionOptions as $section)
+                                                                <option value="{{ $section }}">{{ $section }}</option>
+                                                            @endforeach
+                                                        </select>
+                                                        <select name="lecturer_id" class="select py-1.5 text-xs" aria-label="Lecturer for the new section">
+                                                            <option value="">Lecturer</option>
+                                                            @foreach ($advisors as $advisor)
+                                                                <option value="{{ $advisor->id }}">{{ $advisor->name }}</option>
+                                                            @endforeach
+                                                        </select>
+                                                        <button class="btn-success btn-sm">Save</button>
+                                                    </form>
+                                                    @php($sectionsForThis = $offeringSections[$offering->id] ?? collect())
+                                                    @if ($sectionsForThis->isNotEmpty())
+                                                        <div class="space-y-1">
+                                                            @foreach ($sectionsForThis as $os)
+                                                                <div class="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px]">
+                                                                    <span class="font-semibold text-slate-700">Section {{ $os->section }}</span>
+                                                                    <span class="truncate text-slate-400">{{ $os->lecturer?->name ?? 'Lecturer' }}</span>
+                                                                    <form method="POST" action="{{ route('advisor.offering.section.delete', $os) }}" data-scroll-keep
+                                                                        onsubmit="return confirm('Remove section {{ $os->section }}?');">
+                                                                        @csrf
+                                                                        @method('DELETE')
+                                                                        <button class="btn-ghost btn-sm">
+                                                                            <x-icon name="x" class="size-3.5" />
+                                                                        </button>
+                                                                    </form>
+                                                                </div>
+                                                            @endforeach
+                                                        </div>
+                                                    @else
+                                                        <p class="text-[10px] text-slate-400">No sections yet.</p>
+                                                    @endif
+                                                </div>
+                                            </details>
 
                                             @foreach ($panel as $row)
                                                 @if ($row['advisor'])
-                                                    <form method="POST" action="{{ route('advisor.offering.group', $offering) }}" data-scroll-keep
-                                                        class="grid grid-cols-[minmax(0,1fr)_5.5rem_minmax(0,1.4fr)_auto] items-center gap-2 rounded-xl border border-slate-200 bg-white p-2">
-                                                        @csrf
-                                                        @method('PUT')
-                                                        <input type="hidden" name="advisor_id" value="{{ $row['advisor']->id }}">
-                                                        <span class="min-w-0 text-[11px] font-semibold text-slate-600"
-                                                            title="{{ $row['advisor']->name }} · PAK group">
-                                                            <span class="block truncate">{{ $row['advisor']->name }}</span>
-                                                            <span class="block text-[10px] font-normal text-slate-400">{{ $row['students'] }} student(s)</span>
-                                                        </span>
-                                                        <select name="section" class="select py-1.5 text-xs"
-                                                            aria-label="Section for {{ $row['advisor']->name }}">
-                                                            <option value="" title="No section">None</option>
-                                                            @foreach ($sectionChoices($row['assignment']?->section) as $section)
-                                                                <option value="{{ $section }}" @selected($row['assignment']?->section === $section)>{{ $section }}</option>
-                                                            @endforeach
-                                                        </select>
-                                                        <select name="lecturer_id" class="select py-1.5 text-xs"
-                                                            aria-label="Lecturer for {{ $row['advisor']->name }}">
-                                                            <option value="">— Lecturer —</option>
-                                                            @foreach ($advisors as $advisor)
-                                                                <option value="{{ $advisor->id }}" @selected($row['assignment']?->lecturer_id === $advisor->id)>{{ $advisor->name }}</option>
-                                                            @endforeach
-                                                        </select>
-                                                        <button class="btn-subtle btn-sm">
-                                                            <x-icon name="check" class="size-3.5" /> Save
-                                                        </button>
-                                                    </form>
+                                                    <div class="space-y-2 rounded-xl border border-slate-200 bg-white p-2">
+                                                        <span class="block text-[11px] font-semibold text-slate-600">{{ $row['advisor']->name }}</span>
+                                                        <span class="block text-[10px] text-slate-400">{{ $row['students'] }} student(s) in this PAK group</span>
+
+                                                        @php($offeringSectionsForThis = $offeringSections[$offering->id] ?? collect())
+                                                        @if (($row['student_list'] ?? collect())->isNotEmpty() && $offeringSectionsForThis->isNotEmpty())
+                                                            <form method="POST" action="{{ route('advisor.offering.distribute-sections', $offering) }}" data-scroll-keep
+                                                                class="space-y-2">
+                                                                @csrf
+                                                                <input type="hidden" name="advisor_id" value="{{ $row['advisor']->id }}">
+                                                                <p class="text-[11px] font-semibold text-slate-600">Step 2 · Distribute students to sections</p>
+                                                                <div class="space-y-1">
+                                                                    @foreach ($offeringSectionsForThis as $os)
+                                                                        <div class="flex items-center gap-2">
+                                                                            <span class="w-20 text-[11px] font-semibold text-slate-600">Section {{ $os->section }}</span>
+                                                                            <input type="hidden" name="sections[]" value="{{ $os->section }}">
+                                                                            <input type="number" name="counts[]" value="0" min="0"
+                                                                                class="input w-20 py-1 text-xs">
+                                                                            <span class="text-[10px] text-slate-400">student(s)</span>
+                                                                        </div>
+                                                                    @endforeach
+                                                                </div>
+                                                                <button class="btn-success btn-sm">
+                                                                    <x-icon name="arrow-path" class="size-3.5" /> Distribute randomly
+                                                                </button>
+                                                            </form>
+                                                        @endif
+
+                                                        @if (($row['student_list'] ?? collect())->isNotEmpty())
+                                                            <details class="rounded-xl border border-slate-100 bg-slate-50/60">
+                                                                <summary class="cursor-pointer list-none px-2 py-1.5 text-[11px] font-semibold text-slate-600">
+                                                                    <x-icon name="users" class="size-3.5" /> Step 3 · View {{ $row['students'] }} registered student(s) by section
+                                                                </summary>
+                                                                @php($bySection = collect($row['student_list'])->groupBy(fn ($st) => $st['section'] ?: 'Unassigned'))
+                                                                @foreach ($bySection as $section => $students)
+                                                                    <div class="px-2 pb-2">
+                                                                        <p class="mt-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Section {{ $section }}</p>
+                                                                        <ul class="space-y-0.5 text-[11px] text-slate-600">
+                                                                            @foreach ($students as $st)
+                                                                                <li class="flex items-center justify-between gap-2">
+                                                                                    <span class="truncate">{{ $st['name'] }}</span>
+                                                                                    <span class="font-mono text-[10px] text-slate-400">{{ $st['matric'] }}</span>
+                                                                                </li>
+                                                                            @endforeach
+                                                                        </ul>
+                                                                    </div>
+                                                                @endforeach
+                                                            </details>
+                                                        @endif
+                                                    </div>
                                                 @else
                                                     <p class="rounded-xl border border-dashed border-amber-200 bg-amber-50/60 px-3 py-2 text-[11px] text-amber-700">
                                                         {{ $row['students'] }} student(s) registered without a PAK group —

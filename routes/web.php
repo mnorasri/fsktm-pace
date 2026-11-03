@@ -149,6 +149,11 @@ Route::middleware(['auth', 'hod'])->prefix('advisor')->name('advisor.')->group(f
 
     // One section + lecturer per PAK (advisor) group of an offering.
     Route::put('/offering/{offering}/group', [HodOfferingController::class, 'assignGroup'])->name('offering.group');
+    Route::delete('/offering/group/{group}', [HodOfferingController::class, 'deleteGroup'])->name('offering.group.delete');
+    Route::post('/offering/{offering}/sections', [HodOfferingController::class, 'storeSection'])->name('offering.section.store');
+    Route::delete('/offering/section/{section}', [HodOfferingController::class, 'deleteSection'])->name('offering.section.delete');
+    Route::post('/offering/{offering}/distribute-sections', [HodOfferingController::class, 'distributeSections'])->name('offering.distribute-sections');
+    Route::post('/offering/{offering}/merge-groups', [HodOfferingController::class, 'mergeGroups'])->name('offering.merge-groups');
 
     // Course directory: the HoD adds and maintains courses.
     Route::get('/courses', [HodCourseController::class, 'index'])->name('courses.index');
