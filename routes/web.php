@@ -154,6 +154,8 @@ Route::middleware(['auth', 'hod'])->prefix('advisor')->name('advisor.')->group(f
     Route::delete('/offering/section/{section}', [HodOfferingController::class, 'deleteSection'])->name('offering.section.delete');
     Route::post('/offering/{offering}/distribute-sections', [HodOfferingController::class, 'distributeSections'])->name('offering.distribute-sections');
     Route::post('/offering/{offering}/merge-groups', [HodOfferingController::class, 'mergeGroups'])->name('offering.merge-groups');
+    Route::delete('/offering/{offering}/coordinator', [HodOfferingController::class, 'revokeCoordinator'])->name('offering.coordinator.revoke');
+    Route::delete('/offering/{offering}/sections', [HodOfferingController::class, 'resetSections'])->name('offering.sections.reset');
 
     // Course directory: the HoD adds and maintains courses.
     Route::get('/courses', [HodCourseController::class, 'index'])->name('courses.index');

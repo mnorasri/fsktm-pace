@@ -15,6 +15,7 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -220,6 +221,36 @@ class HodOfferingController extends Controller
         $section->delete();
 
         return back()->with('status', 'Section removed from '.$code.'.');
+    }
+
+    /**
+     * Revoke the coordinator assigned to an offering.
+     */
+    public function revokeCoordinator(Offering $offering): RedirectResponse
+    {
+        $offering->update(['coordinator_id' => null]);
+
+        return back()->with('status', 'Coordinator revoked for '.$offering->course->code.'.');
+    }
+
+    /**
+     * Reset every section setting of an offering: the standalone sections, the
+     * section and lecturer each PAK group was given, the section each student
+     * was distributed into, and the course coordinator.
+     */
+    public function resetSections(Offering $offering): RedirectResponse
+    {
+        DB::transaction(function () use ($offering) {
+            $offering->sections()->delete();
+            $offering->groups()->update(['section' => null, 'lecturer_id' => null]);
+            $offering->preRegistrations()->update(['section' => null]);
+            $offering->update([
+                'section' => '01',
+                'coordinator_id' => null,
+            ]);
+        });
+
+        return back()->with('status', 'Section settings reset for '.$offering->course->code.'.');
     }
 
     /**

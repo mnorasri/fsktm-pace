@@ -4,6 +4,7 @@ use App\Models\Course;
 use App\Models\CoursePlan;
 use App\Models\Offering;
 use App\Models\OfferingGroup;
+use App\Models\OfferingSection;
 use App\Models\PreRegistration;
 use App\Models\Program;
 use App\Models\Setting;
@@ -74,7 +75,7 @@ test('manage offering totals the students registered by each PAK group', functio
         // The columns of the assignment table.
         ->assertSee('Course Code')
         ->assertSee('Course Name')
-        ->assertSee('Registered by PAK group')
+        ->assertSee('Section &amp; lecturer per PAK group', false)
         ->assertSee('Coordinator')
         // The students of each PAK group next to the group itself.
         ->assertSee($norasri->name)
@@ -227,4 +228,52 @@ test('a coordinator is chosen from the lecturers assigned to the course', functi
         ->toContain($legacy->name)
         ->toContain($norasri->name)
         ->toContain($nurezayana->name);
+});
+
+test('the course details panel is no longer shown', function () {
+    [$hod] = makeOfferingWithPakGroups();
+
+    $this->actingAs($hod)
+        ->get(route('advisor.offering.manage'))
+        ->assertOk()
+        ->assertDontSee('Course details')
+        ->assertDontSee('Primary PAK group');
+});
+
+test('the HoD can reset sections, lecturers and the coordinator of an offering', function () {
+    [$hod, $offering, $norasri, $nurezayana] = makeOfferingWithPakGroups();
+
+    // Everything the reset has to clear: a standalone section, a PAK group
+    // section and lecturer, the students' section assignments and the
+    // coordinator.
+    OfferingSection::create([
+        'offering_id' => $offering->id,
+        'section' => '02',
+        'lecturer_id' => $norasri->id,
+    ]);
+
+    OfferingGroup::create([
+        'offering_id' => $offering->id,
+        'advisor_id' => $norasri->id,
+        'section' => '01',
+        'lecturer_id' => $norasri->id,
+    ]);
+
+    $offering->preRegistrations()->first()->update(['section' => '01']);
+    $offering->update(['section' => '02', 'coordinator_id' => $nurezayana->id]);
+
+    $this->actingAs($hod)
+        ->delete(route('advisor.offering.sections.reset', $offering))
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    expect(OfferingSection::where('offering_id', $offering->id)->count())->toBe(0)
+        ->and(OfferingGroup::where('offering_id', $offering->id)->whereNotNull('section')->count())->toBe(0)
+        ->and(OfferingGroup::where('offering_id', $offering->id)->whereNotNull('lecturer_id')->count())->toBe(0)
+        ->and($offering->preRegistrations()->whereNotNull('section')->count())->toBe(0);
+
+    $offering->refresh();
+
+    expect($offering->section)->toBe('01')
+        ->and($offering->coordinator_id)->toBeNull();
 });

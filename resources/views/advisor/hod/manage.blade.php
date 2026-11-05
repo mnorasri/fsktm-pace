@@ -101,7 +101,6 @@
                                 <th>Course Code</th>
                                 <th>Course Name</th>
                                 <th class="text-center">Registered</th>
-                                <th>Registered by PAK group</th>
                                 <th>Section &amp; lecturer per PAK group</th>
                                 <th>Coordinator</th>
                             </tr>
@@ -143,24 +142,8 @@
                                         @endif
                                     </td>
 
-                                    {{-- The same students, totalled per PAK group. --}}
-                                    <td class="align-top!">
-                                        @if ($registeredRows->isEmpty())
-                                            <p class="text-[11px] text-slate-400">No registrations yet</p>
-                                        @else
-                                            <ul class="space-y-1">
-                                                @foreach ($registeredRows as $row)
-                                                    <li class="flex items-center gap-2">
-                                                        <x-badge tone="brand">{{ $row['students'] }}</x-badge>
-                                                        <span class="max-w-[9rem] truncate text-[11px] font-medium text-slate-600"
-                                                            title="{{ $row['advisor']?->name ?? 'No advisor assigned' }}">
-                                                            {{ $row['advisor']?->name ?? 'No advisor assigned' }}
-                                                        </span>
-                                                    </li>
-                                                @endforeach
-                                            </ul>
-                                        @endif
-                                    </td>
+                                    {{-- Sections are managed in Step 1 above; the PAK group
+                                         registration breakdown is no longer shown here. --}}
 
                                     {{-- One save per PAK group: section 01–10 + its lecturer.
                                          The first row is the course as a whole, for the
@@ -209,6 +192,20 @@
                                                         </div>
                                                     @else
                                                         <p class="text-[10px] text-slate-400">No sections yet.</p>
+                                                    @endif
+
+                                                    @php($hasSectionSetup = $sectionsForThis->isNotEmpty()
+                                                        || $offering->groups->contains(fn ($group) => filled($group->section))
+                                                        || $offering->coordinator_id)
+                                                    @if ($hasSectionSetup)
+                                                        <form method="POST" action="{{ route('advisor.offering.sections.reset', $offering) }}" data-scroll-keep
+                                                            onsubmit="return confirm('Reset all section settings for {{ $offering->course->code }}? This clears the sections, assigned lecturers, student section assignments and the coordinator.');">
+                                                            @csrf
+                                                            @method('DELETE')
+                                                            <button class="btn-danger btn-sm w-full justify-center">
+                                                                <x-icon name="arrow-path" class="size-3.5" /> Reset sections
+                                                            </button>
+                                                        </form>
                                                     @endif
                                                 </div>
                                             </details>
@@ -284,75 +281,56 @@
                                     {{-- One coordinator for the course, chosen from the
                                          lecturers already given a section. --}}
                                     <td class="align-top!">
-                                        <form method="POST" action="{{ route('advisor.offering.assign', $offering) }}" data-scroll-keep
-                                            class="min-w-[12rem] space-y-2">
-                                            @csrf
-                                            @method('PUT')
-                                            <select name="coordinator_id" class="select py-1.5 text-xs"
-                                                @disabled($coordinatorOptions->isEmpty()) aria-label="Coordinator for {{ $offering->course->code }}">
-                                                <option value="">— Coordinator —</option>
-                                                @foreach ($coordinatorOptions as $advisor)
-                                                    <option value="{{ $advisor->id }}" @selected($offering->coordinator_id === $advisor->id)>{{ $advisor->name }}</option>
-                                                @endforeach
-                                            </select>
-                                            <button class="btn-subtle btn-sm w-full justify-center" @disabled($coordinatorOptions->isEmpty())>
-                                                <x-icon name="check" class="size-3.5" /> Save coordinator
-                                            </button>
-                                            <p class="text-[11px] leading-snug text-slate-400">
-                                                @if ($coordinatorOptions->isEmpty())
-                                                    Assign a lecturer to a section first.
-                                                @elseif ($offering->coordinator)
-                                                    <span class="font-semibold text-slate-600">{{ $offering->coordinator->name }}</span> coordinates this course.
-                                                @else
-                                                    {{ $coordinatorOptions->count() }} assigned lecturer(s) to choose from.
-                                                @endif
-                                            </p>
-                                        </form>
-                                    </td>
-                                </tr>
-
-                                {{-- Everything that is not part of the assignment itself:
-                                     kept out of the way, collapsed. --}}
-                                <tr class="no-print">
-                                    <td colspan="6" class="bg-slate-50/40 p-0">
-                                        <details class="group px-4 py-1.5">
-                                            <summary class="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 transition hover:text-slate-600 [&::-webkit-details-marker]:hidden">
-                                                <x-icon name="chevron-down" class="size-3.5 -rotate-90 transition group-open:rotate-0" />
-                                                Course details · capacity, schedule, primary PAK group
+                                        <details class="min-w-[12rem] rounded-xl border border-slate-200 bg-white p-2" {{ $offering->coordinator_id ? '' : 'open' }}>
+                                            <summary class="flex cursor-pointer list-none items-center justify-between gap-2">
+                                                <span class="text-[11px] text-slate-600">
+                                                    @if ($offering->coordinator)
+                                                        {{ $offering->coordinator->name }}
+                                                    @else
+                                                        — Coordinator —
+                                                    @endif
+                                                </span>
+                                                <span class="btn-blue btn-sm shrink-0">
+                                                    <x-icon name="pencil" class="size-3.5" /> Edit
+                                                </span>
                                             </summary>
-                                            <form method="POST" action="{{ route('advisor.offering.assign', $offering) }}" data-scroll-keep
-                                                class="mt-2 mb-2 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-3">
-                                                @csrf
-                                                @method('PUT')
-                                                <label class="block">
-                                                    <span class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Capacity</span>
-                                                    <input type="number" name="capacity" value="{{ $offering->capacity }}" min="1" max="500" class="input w-24 py-1.5 text-xs">
-                                                </label>
-                                                <label class="block">
-                                                    <span class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Day</span>
-                                                    <input type="text" name="day" value="{{ $offering->day }}" placeholder="Monday" class="input w-32 py-1.5 text-xs">
-                                                </label>
-                                                <label class="block">
-                                                    <span class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Time</span>
-                                                    <input type="text" name="time" value="{{ $offering->time }}" placeholder="8:00 – 10:00" class="input w-36 py-1.5 text-xs">
-                                                </label>
-                                                <label class="block">
-                                                    <span class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Venue</span>
-                                                    <input type="text" name="venue" value="{{ $offering->venue }}" placeholder="BK 1" class="input w-32 py-1.5 text-xs">
-                                                </label>
-                                                <label class="block">
-                                                    <span class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Primary PAK group</span>
-                                                    <select name="advisee_group_id" class="select w-56 py-1.5 text-xs">
-                                                        <option value="">— PAK Group —</option>
-                                                        @foreach ($advisors as $advisor)
-                                                            <option value="{{ $advisor->id }}" @selected($offering->advisee_group_id === $advisor->id)>{{ $advisor->name }}</option>
+                                            <div class="mt-2 border-t border-slate-100 pt-2">
+                                                <form method="POST" action="{{ route('advisor.offering.assign', $offering) }}" data-scroll-keep
+                                                    class="space-y-2">
+                                                    @csrf
+                                                    @method('PUT')
+                                                    <select name="coordinator_id" class="select py-1.5 text-xs"
+                                                        @disabled($coordinatorOptions->isEmpty()) aria-label="Coordinator for {{ $offering->course->code }}">
+                                                        <option value="">— Coordinator —</option>
+                                                        @foreach ($coordinatorOptions as $advisor)
+                                                            <option value="{{ $advisor->id }}" @selected($offering->coordinator_id === $advisor->id)>{{ $advisor->name }}</option>
                                                         @endforeach
                                                     </select>
-                                                </label>
-                                                <button class="btn-subtle btn-sm">
-                                                    <x-icon name="check" class="size-3.5" /> Save details
-                                                </button>
-                                            </form>
+                                                    <button class="btn-success btn-sm w-full justify-center" @disabled($coordinatorOptions->isEmpty())>
+                                                        <x-icon name="check" class="size-3.5" /> Save
+                                                    </button>
+                                                    <p class="text-[11px] leading-snug text-slate-400">
+                                                        @if ($coordinatorOptions->isEmpty())
+                                                            Assign a lecturer to a section first.
+                                                        @elseif ($offering->coordinator)
+                                                            <span class="font-semibold text-slate-600">{{ $offering->coordinator->name }}</span> coordinates this course.
+                                                        @else
+                                                            {{ $coordinatorOptions->count() }} assigned lecturer(s) to choose from.
+                                                        @endif
+                                                    </p>
+                                                </form>
+                                                @if ($offering->coordinator)
+                                                    <form method="POST" action="{{ route('advisor.offering.coordinator.revoke', $offering) }}" data-scroll-keep
+                                                        class="mt-2"
+                                                        onsubmit="return confirm('Revoke coordinator for {{ $offering->course->code }}?');">
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <button class="btn-danger btn-sm w-full justify-center">
+                                                            <x-icon name="x" class="size-3.5" /> Revoke coordinator
+                                                        </button>
+                                                    </form>
+                                                @endif
+                                            </div>
                                         </details>
                                     </td>
                                 </tr>
