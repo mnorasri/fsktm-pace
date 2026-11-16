@@ -3,6 +3,7 @@
 use App\Models\Course;
 use App\Models\CoursePlan;
 use App\Models\CourseType;
+use App\Models\Department;
 use App\Models\Offering;
 use App\Models\PlanCourse;
 use App\Models\PreRegistration;
@@ -274,4 +275,80 @@ test('an administrator can still change offerings after the cutoff', function ()
         ->assertRedirect();
 
     expect(Offering::whereKey($offering->id)->exists())->toBeFalse();
+});
+
+test('the offering grid can be narrowed by department and programme', function () {
+    $deptA = Department::create(['code' => 'DPA', 'name' => 'Department A']);
+    $deptB = Department::create(['code' => 'DPB', 'name' => 'Department B']);
+
+    $progA = Program::create([
+        'code' => 'PGA', 'name' => 'Programme A', 'duration_years' => 3, 'department_id' => $deptA->id,
+    ]);
+    $progB = Program::create([
+        'code' => 'PGB', 'name' => 'Programme B', 'duration_years' => 3, 'department_id' => $deptB->id,
+    ]);
+
+    $planA = CoursePlan::create(['program_id' => $progA->id, 'code' => 'PLAN-A', 'name' => 'Plan A']);
+    $planB = CoursePlan::create(['program_id' => $progB->id, 'code' => 'PLAN-B', 'name' => 'Plan B']);
+
+    foreach ([[$planA, 'DPA 10103', 'Department A Course'], [$planB, 'DPB 10103', 'Department B Course']] as [$plan, $code, $name]) {
+        Course::create([
+            'code' => $code, 'name' => $name, 'credits' => 3,
+            'semester' => 1, 'course_plan_id' => $plan->id,
+        ]);
+    }
+
+    $hod = User::factory()->create(['role' => 'advisor', 'is_hod' => true]);
+
+    // Both department and programme filters are offered, and both plans load.
+    $this->actingAs($hod)
+        ->get(route('advisor.offering.grid'))
+        ->assertOk()
+        ->assertSee('All departments')
+        ->assertSee('All programmes')
+        ->assertSee('DPA 10103')
+        ->assertSee('DPB 10103')
+        ->assertSee('Department A')
+        ->assertSee('Department B');
+
+    // Department A only.
+    $response = $this->actingAs($hod)
+        ->get(route('advisor.offering.grid', ['department_id' => $deptA->id]))
+        ->assertOk()
+        ->assertSee('DPA 10103')
+        ->assertDontSee('DPB 10103')
+        ->assertSee($planA->code)
+        ->assertDontSee($planB->code);
+
+    expect($response->getContent())->toContain('value="'.$deptA->id.'" selected');
+
+    // Programme B only.
+    $response = $this->actingAs($hod)
+        ->get(route('advisor.offering.grid', ['program_id' => $progB->id]))
+        ->assertOk()
+        ->assertSee('DPB 10103')
+        ->assertDontSee('DPA 10103');
+
+    expect($response->getContent())->toContain('value="'.$progB->id.'" selected');
+
+    // A programme from another department is ignored rather than showing
+    // nothing: the chosen department stays authoritative.
+    $this->actingAs($hod)
+        ->get(route('advisor.offering.grid', [
+            'department_id' => $deptA->id,
+            'program_id' => $progB->id,
+        ]))
+        ->assertOk()
+        ->assertSee('DPA 10103')
+        ->assertDontSee('DPB 10103');
+
+    // Likewise a stale plan from another department is dropped.
+    $this->actingAs($hod)
+        ->get(route('advisor.offering.grid', [
+            'department_id' => $deptA->id,
+            'plan_id' => $planB->id,
+        ]))
+        ->assertOk()
+        ->assertSee('DPA 10103')
+        ->assertDontSee('DPB 10103');
 });

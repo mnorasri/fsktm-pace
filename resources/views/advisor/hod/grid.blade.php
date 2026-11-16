@@ -39,21 +39,43 @@
         </div>
     @endif
 
-    <form method="GET" class="card card-pad no-print mb-5 flex flex-wrap items-end gap-3">
-        <div class="w-full sm:w-[26rem]">
+    <form method="GET" class="card card-pad no-print mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div>
+            <span class="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Department</span>
+            <select name="department_id" data-auto-submit class="select">
+                <option value="">All departments</option>
+                @foreach ($departments as $department)
+                    <option value="{{ $department->id }}" @selected($selectedDepartment === $department->id)>
+                        {{ $department->code }} · {{ $department->name }}
+                    </option>
+                @endforeach
+            </select>
+        </div>
+        <div>
+            <span class="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Programme</span>
+            <select name="program_id" data-auto-submit class="select">
+                <option value="">All programmes</option>
+                @foreach ($programs as $program)
+                    <option value="{{ $program->id }}" @selected($selectedProgram === $program->id)>
+                        {{ $program->code }} · {{ $program->name }}
+                    </option>
+                @endforeach
+            </select>
+        </div>
+        <div class="sm:col-span-2">
             <span class="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Course plan</span>
             <select name="plan_id" data-auto-submit class="select">
                 <option value="">All course plans</option>
                 @foreach ($planOptions as $plan)
-                    <option value="{{ $plan->id }}" @selected((int) request('plan_id') === $plan->id)>
+                    <option value="{{ $plan->id }}" @selected($selectedPlan === $plan->id)>
                         {{ $plan->code }} · {{ $plan->name }}
                     </option>
                 @endforeach
             </select>
         </div>
-        <div class="flex gap-2">
+        <div class="flex gap-2 sm:col-span-2 lg:col-span-4">
             <button class="btn-primary">Filter</button>
-            @if ($selectedPlan)
+            @if ($selectedPlan || $selectedDepartment || $selectedProgram)
                 <a href="{{ route('advisor.offering.grid') }}" class="btn-ghost">Reset</a>
             @endif
         </div>
@@ -78,11 +100,14 @@
                 $hasSpecial = $placed->contains(fn ($course) => (int) $course->plan_semester === 3);
                 $semesters = $hasSpecial ? [1, 2, 3] : [1, 2];
                 $offeredCount = $plan->courses->filter(fn ($course) => isset($existing[$course->id]))->count();
+                $planSubtitle = $plan->name
+                    .' · '.($plan->program?->name ?? 'No programme')
+                    .($plan->program?->department ? ' ('.$plan->program->department->code.')' : '');
                 // (Elective-option CT07A slots are shown as labels only; the
                 //  actual elective courses (CT07) are toggled in the panel below.)
             @endphp
 
-            <x-card pad title="{{ $plan->code }}" subtitle="{{ $plan->name }} · {{ $plan->program?->name }}">
+            <x-card pad title="{{ $plan->code }}" subtitle="{{ $planSubtitle }}">
                 <x-slot:actions>
                     <x-badge tone="slate">{{ $plan->courses->count() }} courses</x-badge>
                     @if ($electives->isNotEmpty())
@@ -251,8 +276,8 @@
             @empty
                 <x-card pad>
                     <p class="py-10 text-center text-sm text-slate-400">
-                        @if ($selectedPlan)
-                            This programme plan has no courses attached to it yet.
+                        @if ($selectedDepartment || $selectedProgram || $selectedPlan)
+                            No course plans match the selected filters.
                         @else
                             No courses are attached to any programme plan yet.
                         @endif

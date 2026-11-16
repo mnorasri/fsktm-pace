@@ -10,6 +10,7 @@ use App\Models\Offering;
 use App\Models\OfferingGroup;
 use App\Models\OfferingSection;
 use App\Models\PreRegistration;
+use App\Models\Program;
 use App\Models\Setting;
 use App\Models\User;
 use App\Support\RegistrationSchedule;
@@ -364,14 +365,49 @@ class HodOfferingController extends Controller
         [$session, $semester] = $this->activeTerm();
 
         $selectedPlan = $request->integer('plan_id') ?: null;
+        $selectedDepartment = $request->integer('department_id') ?: null;
+        $selectedProgram = $request->integer('program_id') ?: null;
+
+        // A programme from another department cannot be combined with the
+        // chosen department, so the department wins.
+        if ($selectedDepartment && $selectedProgram) {
+            $programBelongs = Department::whereKey($selectedDepartment)
+                ->whereHas('programs', fn ($q) => $q->whereKey($selectedProgram))
+                ->exists();
+
+            if (! $programBelongs) {
+                $selectedProgram = null;
+            }
+        }
+
+        // Likewise a plan outside the chosen department or programme is dropped,
+        // so the more specific stale filter cannot empty the page.
+        if ($selectedPlan) {
+            $planBelongs = CoursePlan::whereKey($selectedPlan)
+                ->when($selectedProgram, fn ($q) => $q->where('program_id', $selectedProgram))
+                ->when($selectedDepartment, fn ($q) => $q->whereHas(
+                    'program',
+                    fn ($program) => $program->where('department_id', $selectedDepartment)
+                ))
+                ->exists();
+
+            if (! $planBelongs) {
+                $selectedPlan = null;
+            }
+        }
 
         $plans = CoursePlan::query()
             ->with([
-                'program',
+                'program.department',
                 'courses' => fn ($q) => $q->with('courseType')->orderBy('semester')->orderBy('course_code'),
                 'planCourses.course.courseType',
             ])
             ->when($selectedPlan, fn ($q) => $q->whereKey($selectedPlan))
+            ->when($selectedProgram, fn ($q) => $q->where('program_id', $selectedProgram))
+            ->when($selectedDepartment, fn ($q) => $q->whereHas(
+                'program',
+                fn ($program) => $program->where('department_id', $selectedDepartment)
+            ))
             ->orderBy('code')
             ->get();
 
@@ -412,8 +448,22 @@ class HodOfferingController extends Controller
 
         return view('advisor.hod.grid', [
             'plans' => $plans,
-            'planOptions' => CoursePlan::orderBy('code')->get(['id', 'code', 'name']),
+            'planOptions' => CoursePlan::query()
+                ->when($selectedProgram, fn ($q) => $q->where('program_id', $selectedProgram))
+                ->when($selectedDepartment, fn ($q) => $q->whereHas(
+                    'program',
+                    fn ($program) => $program->where('department_id', $selectedDepartment)
+                ))
+                ->orderBy('code')
+                ->get(['id', 'code', 'name']),
             'selectedPlan' => $selectedPlan,
+            'selectedDepartment' => $selectedDepartment,
+            'selectedProgram' => $selectedProgram,
+            'departments' => Department::orderBy('code')->get(['id', 'code', 'name']),
+            'programs' => Program::query()
+                ->when($selectedDepartment, fn ($q) => $q->where('department_id', $selectedDepartment))
+                ->orderBy('code')
+                ->get(['id', 'code', 'name', 'department_id']),
             'existing' => $existing,
             'activeSession' => $session,
             'activeSemester' => $semester,
