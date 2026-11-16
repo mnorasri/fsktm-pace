@@ -125,7 +125,7 @@ test('an administrator password reset forces a change at the next sign-in', func
     expect($student->fresh()->must_change_password)->toBeTrue();
 });
 
-test('students imported with the default password must change it', function () {
+test('every imported student must choose their own password', function () {
     $admin = User::factory()->create(['role' => 'admin']);
 
     $csv = "matric_num,student_name,student_email,program_code,plan_code,advisor_id,password\n"
@@ -139,7 +139,7 @@ test('students imported with the default password must change it', function () {
         ->assertSessionHasNoErrors();
 
     expect(User::where('student_id', 'A220010')->firstOrFail()->must_change_password)->toBeTrue()
-        ->and(User::where('student_id', 'A220011')->firstOrFail()->must_change_password)->toBeFalse();
+        ->and(User::where('student_id', 'A220011')->firstOrFail()->must_change_password)->toBeTrue();
 });
 
 test('a lecturer created with the default password must change it', function () {
@@ -168,7 +168,7 @@ test('a lecturer created with the default password must change it', function () 
     $this->assertAuthenticatedAs($lecturer);
 });
 
-test('a lecturer who sets their own password is not forced to change it', function () {
+test('a lecturer created with an admin-set password still changes it at first sign-in', function () {
     $admin = User::factory()->create(['role' => 'admin']);
 
     $this->actingAs($admin)
@@ -182,14 +182,14 @@ test('a lecturer who sets their own password is not forced to change it', functi
 
     $lecturer = User::where('staff_id', 'xowner')->firstOrFail();
 
-    expect($lecturer->must_change_password)->toBeFalse();
+    expect($lecturer->must_change_password)->toBeTrue();
 
     auth()->logout();
 
     $this->post(route('login.store'), [
         'email' => $lecturer->email,
         'password' => 'lecturer-secret',
-    ])->assertRedirect(route('advisor.dashboard'));
+    ])->assertRedirect(route('password.change'));
 });
 
 test('an administrator password reset forces a lecturer to change it', function () {
@@ -206,7 +206,7 @@ test('an administrator password reset forces a lecturer to change it', function 
     expect($lecturer->fresh()->must_change_password)->toBeTrue();
 });
 
-test('lecturers imported with the default password must change it', function () {
+test('every imported lecturer must choose their own password', function () {
     $admin = User::factory()->create(['role' => 'admin']);
 
     $csv = "staff_id,lecturer_name,lecturer_email,department_code,password\n"
@@ -220,5 +220,74 @@ test('lecturers imported with the default password must change it', function () 
         ->assertSessionHasNoErrors();
 
     expect(User::where('staff_id', 'ximportdef')->firstOrFail()->must_change_password)->toBeTrue()
-        ->and(User::where('staff_id', 'ximportown')->firstOrFail()->must_change_password)->toBeFalse();
+        ->and(User::where('staff_id', 'ximportown')->firstOrFail()->must_change_password)->toBeTrue();
+});
+
+test('an administrator signing in with the default password must change it', function () {
+    $admin = User::factory()->create([
+        'role' => 'admin',
+        'email' => 'admin-default@fsktm.test',
+        'password' => 'R@hsi4',
+        'must_change_password' => false,
+    ]);
+
+    $this->post(route('login.store'), [
+        'email' => $admin->email,
+        'password' => 'R@hsi4',
+    ])->assertRedirect(route('password.change'));
+
+    expect($admin->fresh()->must_change_password)->toBeTrue();
+
+    // The whole admin portal stays closed until the password is replaced.
+    $this->actingAs($admin->fresh())
+        ->get(route('admin.dashboard'))
+        ->assertRedirect(route('password.change'));
+});
+
+test('a shared default is detected for every role, even without a flag', function (string $role, string $password) {
+    $user = User::factory()->create([
+        'role' => $role,
+        'password' => $password,
+        'must_change_password' => false,
+    ]);
+
+    $this->post(route('login.store'), [
+        'email' => $user->email,
+        'password' => $password,
+    ])->assertRedirect(route('password.change'));
+
+    expect($user->fresh()->must_change_password)->toBeTrue();
+})->with([
+    ['student', 'P@ssw0rd'],
+    ['advisor', 'R@hsi4#'],
+    ['advisor', 'R@hsi4'],
+]);
+
+test('a legacy default imported for a student also forces a change', function () {
+    $admin = User::factory()->create(['role' => 'admin']);
+
+    $csv = "matric_num,student_name,student_email,program_code,plan_code,advisor_id,password\n"
+        ."A220020,Legacy Import,import-legacy@student.fsktm.test,,,,R@hsi4#\n";
+
+    $this->actingAs($admin)
+        ->post(route('admin.students.import'), [
+            'file' => UploadedFile::fake()->createWithContent('students.csv', $csv),
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect(User::where('student_id', 'A220020')->firstOrFail()->must_change_password)->toBeTrue();
+});
+
+test('a shared default cannot be chosen as the new password', function () {
+    $student = defaultPasswordStudent();
+
+    $this->actingAs($student)
+        ->put(route('password.change.update'), [
+            'current_password' => StudentController::DEFAULT_PASSWORD,
+            'password' => 'P@ssw0rd',
+            'password_confirmation' => 'P@ssw0rd',
+        ])
+        ->assertSessionHasErrors('password');
+
+    expect($student->fresh()->must_change_password)->toBeTrue();
 });

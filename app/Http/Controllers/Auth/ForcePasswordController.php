@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\DefaultPasswords;
+use Closure;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -32,7 +34,16 @@ class ForcePasswordController extends Controller
     {
         $data = $request->validate([
             'current_password' => ['required', 'string', 'current_password'],
-            'password' => ['required', 'string', 'min:8', 'confirmed', 'different:current_password'],
+            'password' => [
+                'required', 'string', 'min:8', 'confirmed', 'different:current_password',
+                // The whole point of this screen is to leave the shared default
+                // behind, so none of the known defaults is accepted.
+                function (string $attribute, mixed $value, Closure $fail) {
+                    if (DefaultPasswords::matches($value)) {
+                        $fail('Choose a password other than the shared default.');
+                    }
+                },
+            ],
         ]);
 
         /** @var User $user */

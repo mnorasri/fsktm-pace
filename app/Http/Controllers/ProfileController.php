@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Support\DefaultPasswords;
+use Closure;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -57,7 +59,16 @@ class ProfileController extends Controller
     {
         $data = $request->validate([
             'current_password' => ['required', 'string', 'current_password'],
-            'password' => ['required', 'string', 'min:6', 'confirmed'],
+            'password' => [
+                'required', 'string', 'min:6', 'confirmed',
+                // A shared default would immediately be flagged as needing a
+                // change again, so it is never a valid new password.
+                function (string $attribute, mixed $value, Closure $fail) {
+                    if (DefaultPasswords::matches($value)) {
+                        $fail('Choose a password other than the shared default.');
+                    }
+                },
+            ],
         ]);
 
         /** @var User $user */

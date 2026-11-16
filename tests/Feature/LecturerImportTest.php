@@ -66,12 +66,12 @@ test('imported lecturers can sign in with the password the import stored', funct
     $this->post(route('login.store'), [
         'email' => 'fakri@uthm.edu.my',
         'password' => 'secret123',
-    ])->assertRedirect(route('advisor.dashboard'));
+    ])->assertRedirect(route('password.change'));
 
     $this->assertAuthenticatedAs($lecturer);
 
-    // The advisor portal opens for them.
-    $this->get(route('advisor.dashboard'))->assertOk();
+    // The imported password is temporary: the portal waits for a new one.
+    $this->get(route('advisor.dashboard'))->assertRedirect(route('password.change'));
 });
 
 test('a lecturer created without a password can sign in with the default', function () {

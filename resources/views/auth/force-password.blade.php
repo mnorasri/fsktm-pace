@@ -28,8 +28,8 @@
                         <div>
                             <h1 class="text-xl font-bold tracking-tight text-slate-900">Choose a new password</h1>
                             <p class="mt-1 text-sm text-slate-500">
-                                You signed in with the faculty default password. For your account's security,
-                                set your own password before continuing.
+                                This is your first sign-in or you are still using a default password.
+                                For your account's security, set your own password before continuing.
                             </p>
                         </div>
                     </div>
@@ -53,7 +53,7 @@
                         @method('PUT')
 
                         <label class="block">
-                            <span class="label">Current (default) password</span>
+                            <span class="label">Current password</span>
                             <input type="password" name="current_password" required autofocus
                                 autocomplete="current-password" class="input" placeholder="••••••••">
                         </label>

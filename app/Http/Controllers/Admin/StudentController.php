@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CoursePlan;
 use App\Models\Program;
 use App\Models\User;
+use App\Support\DefaultPasswords;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,7 +24,7 @@ class StudentController extends Controller
     /**
      * The password every account starts with when none is supplied.
      */
-    public const DEFAULT_PASSWORD = 'R@hsi4';
+    public const DEFAULT_PASSWORD = DefaultPasswords::CURRENT;
 
     public function index(Request $request): View
     {
@@ -57,7 +58,9 @@ class StudentController extends Controller
         $password = $request->input('password');
 
         $attributes['password'] = Hash::make($password ?: self::DEFAULT_PASSWORD);
-        $attributes['must_change_password'] = blank($password) || $password === self::DEFAULT_PASSWORD;
+        // A brand-new account always picks its own password at first sign-in,
+        // whether it started with the shared default or one chosen by admin.
+        $attributes['must_change_password'] = true;
 
         $student = User::create($attributes + ['role' => User::ROLE_STUDENT]);
         $this->syncDepartment($student);
@@ -73,9 +76,9 @@ class StudentController extends Controller
 
         if (filled($request->input('password'))) {
             $attributes['password'] = Hash::make($request->input('password'));
-            // A password set by the administrator is their own choice; only
-            // the shared default has to be replaced at the next sign-in.
-            $attributes['must_change_password'] = $request->input('password') === self::DEFAULT_PASSWORD;
+            // A password supplied by the administrator is a temporary one:
+            // the account replaces it at the next sign-in.
+            $attributes['must_change_password'] = true;
         }
 
         $student->update($attributes);
@@ -211,9 +214,9 @@ class StudentController extends Controller
             'role' => User::ROLE_STUDENT,
         ];
 
-        // Blank cells fall back to the shared default, which has to be replaced
-        // at the first sign-in; a password supplied by the sheet does not.
-        $mustChange = blank($password) || trim((string) $password) === self::DEFAULT_PASSWORD;
+        // Every imported account has to choose its own password at first
+        // sign-in; a password in the sheet is only a temporary credential.
+        $mustChange = true;
 
         // Every row commits on its own, so a failure leaves no partial student.
         return DB::transaction(function () use ($attributes, $matric, $email, $emailProvided, $password, $mustChange) {

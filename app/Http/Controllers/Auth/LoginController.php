@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Support\DefaultPasswords;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -46,6 +47,14 @@ class LoginController extends Controller
         }
 
         $request->session()->regenerate();
+
+        // Signing in with a shared default password means this account has not
+        // chosen its own yet — every role, administrators included, is asked
+        // for a new one before the portal opens. This also catches accounts
+        // whose flag was never set (e.g. created by an older seed).
+        if (DefaultPasswords::matches((string) $request->input('password')) && ! $user->must_change_password) {
+            $user->forceFill(['must_change_password' => true])->save();
+        }
 
         // A default password is a first sign-in: choose a new one before the
         // rest of the portal opens.

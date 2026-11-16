@@ -6,6 +6,7 @@ use App\Http\Controllers\Concerns\ImportsCsv;
 use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\User;
+use App\Support\DefaultPasswords;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -22,7 +23,7 @@ class LecturerController extends Controller
     /**
      * The password every account starts with when none is supplied.
      */
-    public const DEFAULT_PASSWORD = 'R@hsi4';
+    public const DEFAULT_PASSWORD = DefaultPasswords::CURRENT;
 
     public function index(Request $request): View
     {
@@ -52,9 +53,9 @@ class LecturerController extends Controller
     {
         $attributes = $this->validated($request);
 
-        // No password supplied means the shared default, which must be changed
-        // at the first sign-in.
-        $attributes['must_change_password'] ??= true;
+        // Every new account chooses its own password at the first sign-in,
+        // whether it started with the shared default or an admin-set one.
+        $attributes['must_change_password'] = true;
 
         User::create($attributes + [
             'role' => User::ROLE_ADVISOR,
@@ -184,9 +185,9 @@ class LecturerController extends Controller
             'role' => User::ROLE_ADVISOR,
         ];
 
-        // A blank cell falls back to the shared default, which has to be
-        // replaced at the first sign-in; a supplied password does not.
-        $mustChange = blank($password) || trim((string) $password) === self::DEFAULT_PASSWORD;
+        // Every imported account chooses its own password at first sign-in;
+        // a password in the sheet is only a temporary credential.
+        $mustChange = true;
 
         // Every row commits on its own, so a failure leaves no partial lecturer.
         return DB::transaction(function () use ($attributes, $staffId, $email, $emailProvided, $password, $mustChange) {
@@ -285,9 +286,9 @@ class LecturerController extends Controller
         if (filled($data['password'] ?? null)) {
             $plain = $data['password'];
             $data['password'] = $this->passwordFrom($plain);
-            // A password chosen by the administrator is their own choice;
-            // only the shared default has to be replaced at sign-in.
-            $data['must_change_password'] = $plain === self::DEFAULT_PASSWORD;
+            // A password supplied by the administrator is temporary: the
+            // account replaces it at the next sign-in.
+            $data['must_change_password'] = true;
         } else {
             unset($data['password']);
         }

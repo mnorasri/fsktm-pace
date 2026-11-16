@@ -149,3 +149,17 @@ test('the profile is linked from the navigation for every role', function () {
         ->assertOk()
         ->assertSee(route('profile'));
 });
+
+test('the profile password form refuses a shared default', function () {
+    $user = User::factory()->create(['password' => 'password']);
+
+    $this->actingAs($user)
+        ->put(route('profile.password'), [
+            'current_password' => 'password',
+            'password' => 'R@hsi4#',
+            'password_confirmation' => 'R@hsi4#',
+        ])
+        ->assertSessionHasErrors('password');
+
+    expect(Hash::check('password', $user->refresh()->password))->toBeTrue();
+});
