@@ -10,10 +10,33 @@ use Throwable;
 trait ImportsCsv
 {
     /**
+     * Headers this project's imports address by name. A position holding one of
+     * these belongs to that column, so it must never be borrowed as the
+     * positional fallback for a different, omitted column.
+     *
+     * @var list<string>
+     */
+    private const KNOWN_HEADERS = [
+        'matric_num', 'student_id', 'student_name', 'name', 'student_email', 'email',
+        'program_code', 'program', 'plan_code', 'plan', 'advisor_id', 'lecturer_id',
+        'password', 'staff_id', 'lecturer_name', 'lecturer_email', 'department_code',
+        'department', 'course_code', 'code', 'course_name_en', 'course_name',
+        'course_name_my', 'name_my', 'credit_hours', 'credits', 'credit_hour',
+        'course_load', 'course_type_code', 'course_type', 'pre_requisite',
+        'prerequisites', 'sc_code', 'vbe_ept_code', 'vbe_code', 'vbe', 'sdg_code',
+        'sdg', 'year', 'semester', 'study_plan_code', 'study_plan_name',
+        'programme_code', 'programme_name', 'version', 'total_semester',
+        'duration_years', 'total_credits',
+    ];
+
+    /**
      * Read an uploaded CSV into an array of rows keyed by both the header row
      * (lower-cased, trimmed) and the zero-based column position.
      *
-     * @return array<int, array<string|int, string>>
+     * Each row also carries the header list under `__columns` so a lookup can
+     * tell whether a position belongs to another, differently named column.
+     *
+     * @return array<int, array<string|int, mixed>>
      */
     protected function readCsv(UploadedFile $file): array
     {
@@ -26,7 +49,7 @@ trait ImportsCsv
         $header = null;
         $rows = [];
 
-        while (($line = fgetcsv($handle)) !== false) {
+        while (($line = fgetcsv($handle, 0, ',', '"', '\\')) !== false) {
             if ($line === [null] || $line === []) {
                 continue;
             }
@@ -54,6 +77,8 @@ trait ImportsCsv
             }
 
             if (array_filter($row, fn ($value) => $value !== '') !== []) {
+                $row['__columns'] = $header;
+
                 $rows[] = $row;
             }
         }
@@ -67,11 +92,27 @@ trait ImportsCsv
      * Read a CSV cell by header name, falling back to its fixed column
      * position in the documented import structure.
      *
-     * @param  array<string|int, string>  $row
+     * The positional fallback keeps working for sheets that use their own
+     * header names (or no header at all). It stops at a position that carries
+     * a known column of another field: an omitted `plan_code` must not read
+     * the advisor's cell that now sits in that position.
+     *
+     * @param  array<string|int, mixed>  $row
      */
     protected function csvValue(array $row, string $key, int $position): ?string
     {
-        $value = $row[$key] ?? $row[$position] ?? null;
+        $value = $row[$key] ?? null;
+
+        if ($value === null) {
+            $columns = $row['__columns'] ?? null;
+            $header = is_array($columns) ? (string) ($columns[$position] ?? '') : '';
+
+            if ($header !== '' && in_array($header, self::KNOWN_HEADERS, true)) {
+                return null;
+            }
+
+            $value = $row[$position] ?? null;
+        }
 
         return blank($value) ? null : trim((string) $value);
     }

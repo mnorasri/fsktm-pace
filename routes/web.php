@@ -81,6 +81,8 @@ Route::middleware(['auth', 'password.changed', 'role:admin'])->prefix('admin')->
     Route::post('/lecturers/{lecturer}/reset-password', [LecturerController::class, 'resetPassword'])->name('lecturers.reset-password');
 
     Route::get('/students', [StudentController::class, 'index'])->name('students.index');
+    Route::get('/students/by-advisor', [StudentController::class, 'byAdvisor'])->name('students.by-advisor');
+    Route::put('/students/{student}/placement', [StudentController::class, 'updatePlacement'])->name('students.placement');
     Route::post('/students', [StudentController::class, 'store'])->name('students.store');
     Route::post('/students/import', [StudentController::class, 'import'])->name('students.import');
     Route::put('/students/{student}', [StudentController::class, 'update'])->name('students.update');

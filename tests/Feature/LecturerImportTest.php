@@ -199,3 +199,18 @@ test('removing a lecturer clears the advisor link of their advisees', function (
     expect(User::find($advisor->id))->toBeNull()
         ->and($student->fresh()->advisor_id)->toBeNull();
 });
+
+test('a lecturer CSV without a department column still imports', function () {
+    Department::create(['code' => 'JKP', 'name' => 'Software Engineering']);
+
+    // No department_code column: the password must not be read as a department.
+    importLecturers(implode("\n", [
+        'staff_id,lecturer_name,lecturer_email,password',
+        'LEC900,No Department,nodept@uthm.edu.my,secret123',
+    ])."\n");
+
+    $lecturer = User::where('staff_id', 'LEC900')->firstOrFail();
+
+    expect($lecturer->department_id)->toBeNull()
+        ->and(Hash::check('secret123', $lecturer->password))->toBeTrue();
+});

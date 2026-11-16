@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use RuntimeException;
 use Throwable;
@@ -50,6 +51,119 @@ class StudentController extends Controller
             'plans' => CoursePlan::orderBy('code')->get(),
             'advisors' => User::where('role', User::ROLE_ADVISOR)->whereNotNull('staff_id')->orderBy('name')->get(),
         ]);
+    }
+
+    /**
+     * Browse students grouped by their PAK (academic) advisor, without changing
+     * any table structure: each row lets the administrator re-place a student
+     * on a programme and study plan from the same screen.
+     */
+    public function byAdvisor(Request $request): View
+    {
+        $search = trim((string) $request->input('search'));
+        $selected = $request->input('advisor');
+
+        $advisors = User::query()
+            ->where('role', User::ROLE_ADVISOR)
+            ->whereNotNull('staff_id')
+            ->withCount(['advisees' => fn ($q) => $q->where('role', User::ROLE_STUDENT)])
+            ->when($search !== '', function ($q) use ($search) {
+                $term = '%'.$search.'%';
+                $q->where(fn ($inner) => $inner
+                    ->where('name', 'like', $term)
+                    ->orWhere('staff_id', 'like', $term));
+            })
+            ->orderBy('name')
+            ->get();
+
+        $selectedAdvisor = null;
+        $showUnassigned = $selected === 'none';
+        $students = collect();
+
+        if ($showUnassigned) {
+            $students = User::query()
+                ->where('role', User::ROLE_STUDENT)
+                ->whereNull('advisor_id')
+                ->with(['program', 'plan'])
+                ->orderBy('name')
+                ->get();
+        } elseif (filled($selected)) {
+            $selectedAdvisor = User::query()
+                ->where('role', User::ROLE_ADVISOR)
+                ->whereKey($selected)
+                ->firstOrFail();
+
+            $students = User::query()
+                ->where('role', User::ROLE_STUDENT)
+                ->where('advisor_id', $selectedAdvisor->staff_id)
+                ->with(['program', 'plan'])
+                ->orderBy('name')
+                ->get();
+        }
+
+        return view('admin.students-by-advisor', [
+            'advisors' => $advisors,
+            'selectedAdvisor' => $selectedAdvisor,
+            'showUnassigned' => $showUnassigned,
+            'students' => $students,
+            'search' => $search,
+            'unassigned' => User::where('role', User::ROLE_STUDENT)->whereNull('advisor_id')->count(),
+            'totalStudents' => User::where('role', User::ROLE_STUDENT)->count(),
+            'programs' => Program::with(['plans' => fn ($q) => $q->orderBy('code')])
+                ->orderBy('code')
+                ->get(),
+        ]);
+    }
+
+    /**
+     * Change one student's programme / study plan from the PAK advisor view.
+     * The programme and plan stay consistent, and the department follows the
+     * programme so the rest of the portal keeps working.
+     */
+    public function updatePlacement(Request $request, User $student): RedirectResponse
+    {
+        abort_unless($student->role === User::ROLE_STUDENT, 404);
+
+        $data = $request->validate([
+            'program_id' => ['nullable', 'exists:programs,id'],
+            'plan_id' => ['nullable', 'exists:course_plans,id'],
+        ]);
+
+        $plan = filled($data['plan_id'] ?? null)
+            ? CoursePlan::find($data['plan_id'])
+            : null;
+
+        if ($plan && filled($data['program_id'] ?? null) && (int) $plan->program_id !== (int) $data['program_id']) {
+            throw ValidationException::withMessages([
+                'plan_id' => 'That study plan does not belong to the selected programme.',
+            ]);
+        }
+
+        // A plan on its own implies its programme.
+        if ($plan && blank($data['program_id'] ?? null)) {
+            $data['program_id'] = $plan->program_id;
+        }
+
+        // Moving to another programme drops a plan that belongs to the old one,
+        // so a student is never left on a programme/plan mismatch.
+        if (! $plan && filled($data['program_id'] ?? null)) {
+            $student->loadMissing('plan');
+
+            if ($student->plan && (int) $student->plan->program_id !== (int) $data['program_id']) {
+                $data['plan_id'] = null;
+            }
+        }
+
+        $student->update($data);
+        $this->syncDepartment($student);
+        $student->refresh()->load(['program', 'plan']);
+
+        return back()->with(
+            'status',
+            $student->name.' is now on '
+                .($student->program?->code ?? 'no programme')
+                .' / '.($student->plan?->code ?? 'no plan').'.'
+        );
     }
 
     public function store(Request $request): RedirectResponse
@@ -176,7 +290,7 @@ class StudentController extends Controller
         $email = $email ?: Str::lower($matric).'@student.fsktm.test';
 
         $program = $programCode
-            ? Program::whereRaw('lower(code) = ?', [mb_strtolower($programCode)])->with('plans')->first()
+            ? Program::whereRaw('lower(code) = ?', [mb_strtolower($programCode)])->first()
             : null;
 
         if ($programCode && ! $program) {
@@ -185,10 +299,22 @@ class StudentController extends Controller
 
         $plan = $planCode
             ? CoursePlan::whereRaw('lower(code) = ?', [mb_strtolower($planCode)])->first()
-            : $program?->plans->first();
+            : null;
 
         if ($planCode && ! $plan) {
             throw new RuntimeException("plan_code \"{$planCode}\" was not found");
+        }
+
+        // The plan has to fit the programme it is imported with; otherwise the
+        // student would sit on a plan from a different programme.
+        if ($plan && $program && (int) $plan->program_id !== (int) $program->id) {
+            throw new RuntimeException("plan_code \"{$planCode}\" does not belong to program_code \"{$programCode}\"");
+        }
+
+        // A plan on its own implies its programme, exactly like the admin
+        // placement screen.
+        if ($plan && ! $program) {
+            $program = $plan->program;
         }
 
         // PAK mapping: the foreign key is the advisor's staff ID, with the
@@ -207,19 +333,35 @@ class StudentController extends Controller
         $attributes = [
             'name' => $name ?? $email,
             'student_id' => $matric,
-            'program_id' => $program?->id,
-            'plan_id' => $plan?->id,
-            'department_id' => $program?->department_id,
-            'advisor_id' => $advisor?->staff_id,
             'role' => User::ROLE_STUDENT,
         ];
+
+        // Only the cells the sheet actually carries are written. Re-importing a
+        // roster without programme, plan or advisor columns therefore leaves an
+        // existing placement alone instead of wiping it.
+        $placement = [];
+
+        if ($program) {
+            $placement['program_id'] = $program->id;
+            $placement['department_id'] = $program->department_id;
+        }
+
+        if ($plan) {
+            $placement['plan_id'] = $plan->id;
+        }
+
+        if ($advisor) {
+            $placement['advisor_id'] = $advisor->staff_id;
+        }
+
+        $programId = $program?->id;
 
         // Every imported account has to choose its own password at first
         // sign-in; a password in the sheet is only a temporary credential.
         $mustChange = true;
 
         // Every row commits on its own, so a failure leaves no partial student.
-        return DB::transaction(function () use ($attributes, $matric, $email, $emailProvided, $password, $mustChange) {
+        return DB::transaction(function () use ($attributes, $placement, $matric, $email, $emailProvided, $password, $mustChange, $programId) {
             // Match on the matric number first so re-imports update existing
             // students instead of creating duplicates.
             $existing = User::where('student_id', $matric)->first()
@@ -236,7 +378,16 @@ class StudentController extends Controller
                     $attributes['email'] = $email;
                 }
 
-                $existing->update($attributes);
+                // Moving the student to another programme drops a plan that
+                // belongs to the old one, unless the sheet names a plan.
+                if ($programId
+                    && ! array_key_exists('plan_id', $placement)
+                    && $existing->plan
+                    && (int) $existing->plan->program_id !== (int) $programId) {
+                    $placement['plan_id'] = null;
+                }
+
+                $existing->update($attributes + $placement);
 
                 // A blank password leaves the current one untouched.
                 if (filled($password)) {
@@ -249,7 +400,7 @@ class StudentController extends Controller
                 return 'updated';
             }
 
-            User::create($attributes + [
+            User::create($attributes + $placement + [
                 'email' => $email,
                 'password' => $this->passwordFrom($password),
                 'must_change_password' => $mustChange,

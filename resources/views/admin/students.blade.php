@@ -5,6 +5,9 @@
 @section('content')
     <x-page-header title="Manage Students" subtitle="Student directory with programme, plan and PAK advisor mapping">
         <x-slot:actions>
+            <a href="{{ route('admin.students.by-advisor') }}" class="btn-ghost">
+                <x-icon name="users" class="size-4" /> By PAK Advisor
+            </a>
             <button type="button" data-modal-open="import-students" class="btn-ghost">
                 <x-icon name="upload" class="size-4" /> Import CSV
             </button>
@@ -146,16 +149,18 @@
 
     {{-- Import --}}
     <x-modal id="import-students" title="Bulk import students"
-        subtitle="CSV columns: matric_num, student_name, student_email, program_code, plan_code, advisor_id, password">
+        subtitle="CSV columns: matric_num, student_name, student_email, program_code, plan_code, advisor_id, password — only matric_num is required">
         <form method="POST" action="{{ route('admin.students.import') }}" enctype="multipart/form-data" class="space-y-4">
             @csrf
             <input type="file" name="file" accept=".csv,text/csv" class="input" required>
             <div class="rounded-2xl bg-slate-50 p-3.5 text-xs text-slate-500">
                 <p class="font-mono">matric_num,student_name,student_email,program_code,plan_code,advisor_id,password</p>
-                <p class="mt-2 font-mono">A210001,Aina Rahman,aina@student.fsktm.test,BIP,CS241-PLAN,norasri,secret123</p>
+                <p class="mt-2 font-mono">A210001,Aina Rahman,aina@student.fsktm.test,BIP,BIP20232024-LOCAL,norasri,secret123</p>
+                <p class="mt-1 font-mono">A210002,Aina Rahman,aina2@student.fsktm.test,BIP,,norasri,</p>
                 <p class="mt-2"><span class="font-semibold">matric_num</span> is the student's primary key. <span class="font-semibold">program_code</span> and <span class="font-semibold">plan_code</span> are matched by code, and <span class="font-semibold">advisor_id</span> is the PAK advisor's <span class="font-semibold">staff ID</span> (foreign key).</p>
-                <p class="mt-1">Rows are matched on <span class="font-semibold">matric_num</span> (or email). A blank password defaults to <span class="font-semibold">R@hsi4</span>.</p>
-                <p class="mt-1">A row that fails (missing matric, unknown programme/plan/advisor, clashing email) is skipped; the rest of the file still imports and the summary lists every skipped row.</p>
+                <p class="mt-1"><span class="font-semibold">plan_code is optional</span> — leave the column out (or blank) and the student keeps no plan, which can then be set from <span class="font-semibold">By PAK Advisor</span>. A plan that is given must belong to the row's programme.</p>
+                <p class="mt-1">Columns may be left out entirely; omitting programme, plan or advisor leaves an existing student's current placement untouched. Rows are matched on <span class="font-semibold">matric_num</span> (or email). A blank password defaults to <span class="font-semibold">R@hsi4</span>.</p>
+                <p class="mt-1">A row that fails (missing matric, unknown programme/plan/advisor, mismatched plan, clashing email) is skipped; the rest of the file still imports and the summary lists every skipped row.</p>
             </div>
             <div class="flex items-center justify-end gap-2">
                 <button type="button" data-modal-close class="btn-ghost">Cancel</button>
