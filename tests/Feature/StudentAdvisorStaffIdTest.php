@@ -143,9 +143,10 @@ test('a student created without a password signs in with the default', function 
     $this->post(route('login.store'), [
         'email' => 'defaultpw@student.fsktm.test',
         'password' => StudentController::DEFAULT_PASSWORD,
-    ])->assertRedirect(route('student.dashboard'));
+    ])->assertRedirect(route('password.change'));
 
     $this->assertAuthenticatedAs($student);
+    expect($student->fresh()->must_change_password)->toBeTrue();
 });
 
 test('students and lecturers share the same default password', function () {

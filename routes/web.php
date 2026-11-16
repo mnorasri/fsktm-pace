@@ -11,6 +11,7 @@ use App\Http\Controllers\Advisor\DashboardController as AdvisorDashboardControll
 use App\Http\Controllers\Advisor\HodCourseController;
 use App\Http\Controllers\Advisor\HodOfferingController;
 use App\Http\Controllers\Advisor\HodStudyPlanController;
+use App\Http\Controllers\Auth\ForcePasswordController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Curriculum\CourseController as CurriculumCourseController;
 use App\Http\Controllers\Curriculum\ProgrammeController;
@@ -47,6 +48,13 @@ Route::post('/logout', [LoginController::class, 'destroy'])
 // Profile (every signed-in account, whatever its role)
 // -------------------------------------------------------------------
 Route::middleware('auth')->group(function () {
+    // A first sign-in with the faculty default password stops here until the
+    // account has chosen its own password.
+    Route::get('/password/change', [ForcePasswordController::class, 'edit'])->name('password.change');
+    Route::put('/password/change', [ForcePasswordController::class, 'update'])->name('password.change.update');
+});
+
+Route::middleware(['auth', 'password.changed'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::put('/profile/password', [ProfileController::class, 'password'])->name('profile.password');
@@ -55,11 +63,12 @@ Route::middleware('auth')->group(function () {
 // -------------------------------------------------------------------
 // Admin portal
 // -------------------------------------------------------------------
-Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'password.changed', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', [AdminDashboardController::class, 'index'])->name('dashboard');
 
     Route::get('/configs', [ConfigController::class, 'index'])->name('configs.index');
     Route::put('/configs/settings', [ConfigController::class, 'settings'])->name('configs.settings');
+    Route::put('/configs/schedule', [ConfigController::class, 'schedule'])->name('configs.schedule');
     Route::post('/configs/{type}', [ConfigController::class, 'store'])->name('configs.store');
     Route::put('/configs/{type}/{id}', [ConfigController::class, 'update'])->name('configs.update');
     Route::delete('/configs/{type}/{id}', [ConfigController::class, 'destroy'])->name('configs.destroy');
@@ -89,7 +98,7 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
 // -------------------------------------------------------------------
 // Curriculum management (administrator, HoD and HoP)
 // -------------------------------------------------------------------
-Route::middleware(['auth', 'curriculum'])->prefix('curriculum')->name('curriculum.')->group(function () {
+Route::middleware(['auth', 'password.changed', 'curriculum'])->prefix('curriculum')->name('curriculum.')->group(function () {
     Route::get('/programmes', [ProgrammeController::class, 'index'])->name('programmes.index');
     Route::post('/programmes', [ProgrammeController::class, 'store'])->name('programmes.store');
     Route::post('/programmes/import', [ProgrammeController::class, 'import'])->name('programmes.import');
@@ -118,7 +127,7 @@ Route::middleware(['auth', 'curriculum'])->prefix('curriculum')->name('curriculu
 // -------------------------------------------------------------------
 // Advisor / PAK portal
 // -------------------------------------------------------------------
-Route::middleware(['auth', 'role:advisor'])->prefix('advisor')->name('advisor.')->group(function () {
+Route::middleware(['auth', 'password.changed', 'role:advisor'])->prefix('advisor')->name('advisor.')->group(function () {
     Route::get('/', [AdvisorDashboardController::class, 'index'])->name('dashboard');
     // The detail panel for one supervisee, returned as a fragment so the
     // dashboard can swap it in without reloading the page.
@@ -139,23 +148,27 @@ Route::middleware(['auth', 'role:advisor'])->prefix('advisor')->name('advisor.')
 // -------------------------------------------------------------------
 // Kept out of the advisor-only group: a Head of Department is an advisor, and
 // the administrator may open these pages as well (see EnsureHod).
-Route::middleware(['auth', 'hod'])->prefix('advisor')->name('advisor.')->group(function () {
+Route::middleware(['auth', 'password.changed', 'hod'])->prefix('advisor')->name('advisor.')->group(function () {
     Route::get('/offering/manage', [HodOfferingController::class, 'manage'])->name('offering.manage');
     Route::get('/offering/grid', [HodOfferingController::class, 'grid'])->name('offering.grid');
     Route::get('/offering/workload', [HodOfferingController::class, 'workload'])->name('offering.workload');
     Route::get('/offering/export', [HodOfferingController::class, 'export'])->name('offering.export');
-    Route::post('/offering/toggle', [HodOfferingController::class, 'toggle'])->name('offering.toggle');
-    Route::put('/offering/{offering}', [HodOfferingController::class, 'assign'])->name('offering.assign');
 
-    // One section + lecturer per PAK (advisor) group of an offering.
-    Route::put('/offering/{offering}/group', [HodOfferingController::class, 'assignGroup'])->name('offering.group');
-    Route::delete('/offering/group/{group}', [HodOfferingController::class, 'deleteGroup'])->name('offering.group.delete');
-    Route::post('/offering/{offering}/sections', [HodOfferingController::class, 'storeSection'])->name('offering.section.store');
-    Route::delete('/offering/section/{section}', [HodOfferingController::class, 'deleteSection'])->name('offering.section.delete');
-    Route::post('/offering/{offering}/distribute-sections', [HodOfferingController::class, 'distributeSections'])->name('offering.distribute-sections');
-    Route::post('/offering/{offering}/merge-groups', [HodOfferingController::class, 'mergeGroups'])->name('offering.merge-groups');
-    Route::delete('/offering/{offering}/coordinator', [HodOfferingController::class, 'revokeCoordinator'])->name('offering.coordinator.revoke');
-    Route::delete('/offering/{offering}/sections', [HodOfferingController::class, 'resetSections'])->name('offering.sections.reset');
+    // Offering changes close for the HoD at the administrator's cutoff date.
+    Route::middleware('offering.window')->group(function () {
+        Route::post('/offering/toggle', [HodOfferingController::class, 'toggle'])->name('offering.toggle');
+        Route::put('/offering/{offering}', [HodOfferingController::class, 'assign'])->name('offering.assign');
+
+        // One section + lecturer per PAK (advisor) group of an offering.
+        Route::put('/offering/{offering}/group', [HodOfferingController::class, 'assignGroup'])->name('offering.group');
+        Route::delete('/offering/group/{group}', [HodOfferingController::class, 'deleteGroup'])->name('offering.group.delete');
+        Route::post('/offering/{offering}/sections', [HodOfferingController::class, 'storeSection'])->name('offering.section.store');
+        Route::delete('/offering/section/{section}', [HodOfferingController::class, 'deleteSection'])->name('offering.section.delete');
+        Route::post('/offering/{offering}/distribute-sections', [HodOfferingController::class, 'distributeSections'])->name('offering.distribute-sections');
+        Route::post('/offering/{offering}/merge-groups', [HodOfferingController::class, 'mergeGroups'])->name('offering.merge-groups');
+        Route::delete('/offering/{offering}/coordinator', [HodOfferingController::class, 'revokeCoordinator'])->name('offering.coordinator.revoke');
+        Route::delete('/offering/{offering}/sections', [HodOfferingController::class, 'resetSections'])->name('offering.sections.reset');
+    });
 
     // Course directory: the HoD adds and maintains courses.
     Route::get('/courses', [HodCourseController::class, 'index'])->name('courses.index');
@@ -176,7 +189,7 @@ Route::middleware(['auth', 'hod'])->prefix('advisor')->name('advisor.')->group(f
 // -------------------------------------------------------------------
 // Student portal
 // -------------------------------------------------------------------
-Route::middleware(['auth', 'role:student'])->prefix('student')->name('student.')->group(function () {
+Route::middleware(['auth', 'password.changed', 'role:student'])->prefix('student')->name('student.')->group(function () {
     Route::get('/', [StudentDashboardController::class, 'index'])->name('dashboard');
 
     Route::get('/study-plan', [StudyPlanController::class, 'index'])->name('study-plan');

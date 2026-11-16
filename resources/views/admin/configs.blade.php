@@ -79,7 +79,19 @@
 @endphp
 
 @section('content')
-    <x-page-header title="Manage Configs" subtitle="Global academic configuration and reference collections" />
+    <x-page-header title="Manage Configs" subtitle="Global academic configuration and reference collections">
+        <x-slot:actions>
+            <x-badge tone="brand" dot>{{ $activeSession }} · Semester {{ $activeSemester }}</x-badge>
+            <x-badge :tone="$offeringCutoff ? 'amber' : 'slate'" dot>
+                Offering cutoff:
+                {{ $offeringCutoff ? \Illuminate\Support\Carbon::parse($offeringCutoff)->format('d M Y') : 'open' }}
+            </x-badge>
+            <x-badge :tone="$registrationCutoff ? 'emerald' : 'slate'" dot>
+                Registration cutoff:
+                {{ $registrationCutoff ? \Illuminate\Support\Carbon::parse($registrationCutoff)->format('d M Y') : 'open' }}
+            </x-badge>
+        </x-slot:actions>
+    </x-page-header>
 
     {{-- Active academic term --}}
     <x-card pad title="Active Academic Term" subtitle="Sets the globally active session and semester across all portals" tone="brand" icon="calendar">
@@ -97,6 +109,34 @@
             </label>
             <div class="flex items-end">
                 <button class="btn-primary w-full"><x-icon name="check" class="size-4" /> Save active term</button>
+            </div>
+        </form>
+    </x-card>
+
+    {{-- Registration schedule --}}
+    <x-card class="mt-6" pad title="Registration Schedule"
+        subtitle="Deadlines for publishing offerings and for students choosing their courses"
+        tone="brand" icon="calendar">
+        <form method="POST" action="{{ route('admin.configs.schedule') }}">
+            @csrf
+            @method('PUT')
+
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <x-field name="offering_cutoff_date" label="HoD course-offering cutoff" type="date"
+                    :value="$offeringCutoff" />
+                <x-field name="registration_cutoff_date" label="Student registration cutoff" type="date"
+                    :value="$registrationCutoff" />
+            </div>
+
+            <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+                <p class="max-w-xl text-xs text-slate-400">
+                    Heads of Department may change offerings up to the offering cutoff. Students may choose
+                    courses from the day after that cutoff until the registration cutoff (inclusive).
+                    Leave a date empty to keep that side of the window open.
+                </p>
+                <button class="btn-success">
+                    <x-icon name="check" class="size-4" /> Save schedule
+                </button>
             </div>
         </form>
     </x-card>

@@ -26,7 +26,7 @@
     </div>
 
     <div class="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <x-card class="xl:col-span-2" pad title="Distribution by Department" subtitle="Courses, students and lecturers per department" pad>
+        <x-card class="xl:col-span-2" pad title="Distribution by Department" subtitle="Courses, students and lecturers per department">
             <div class="-mx-6 overflow-x-auto">
                 <table class="data-table">
                     <thead>

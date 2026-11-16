@@ -12,11 +12,13 @@ use App\Models\OfferingSection;
 use App\Models\PreRegistration;
 use App\Models\Setting;
 use App\Models\User;
+use App\Support\RegistrationSchedule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -170,6 +172,8 @@ class HodOfferingController extends Controller
                 ->map(fn (int $number) => str_pad((string) $number, 2, '0', STR_PAD_LEFT)),
             'activeSession' => $session,
             'activeSemester' => $semester,
+            'offeringWindowOpen' => RegistrationSchedule::offeringWindowOpen(),
+            'offeringCutoff' => RegistrationSchedule::offeringCutoff(),
         ]);
     }
 
@@ -241,9 +245,32 @@ class HodOfferingController extends Controller
     public function resetSections(Offering $offering): RedirectResponse
     {
         DB::transaction(function () use ($offering) {
-            $offering->sections()->delete();
-            $offering->groups()->update(['section' => null, 'lecturer_id' => null]);
-            $offering->preRegistrations()->update(['section' => null]);
+            // Older deployments may predate the sections feature: only touch
+            // the tables and columns that exist rather than failing with a 500.
+            if (Schema::hasTable('offering_sections')) {
+                DB::table('offering_sections')
+                    ->where('offering_id', $offering->id)
+                    ->delete();
+            }
+
+            if (Schema::hasTable('offering_groups')) {
+                $values = ['section' => null];
+
+                if (Schema::hasColumn('offering_groups', 'lecturer_id')) {
+                    $values['lecturer_id'] = null;
+                }
+
+                DB::table('offering_groups')
+                    ->where('offering_id', $offering->id)
+                    ->update($values);
+            }
+
+            if (Schema::hasTable('pre_registrations') && Schema::hasColumn('pre_registrations', 'section')) {
+                DB::table('pre_registrations')
+                    ->where('offering_id', $offering->id)
+                    ->update(['section' => null]);
+            }
+
             $offering->update([
                 'section' => '01',
                 'coordinator_id' => null,
@@ -390,6 +417,8 @@ class HodOfferingController extends Controller
             'existing' => $existing,
             'activeSession' => $session,
             'activeSemester' => $semester,
+            'offeringWindowOpen' => RegistrationSchedule::offeringWindowOpen(),
+            'offeringCutoff' => RegistrationSchedule::offeringCutoff(),
         ]);
     }
 
@@ -409,6 +438,9 @@ class HodOfferingController extends Controller
             ->first();
 
         if ($offering) {
+            // Removing an offering also removes its student registrations, so the
+            // grid asks for confirmation first. A Head of Department may still
+            // add or remove courses until the administrator's cutoff date.
             $offering->delete();
 
             return back()->with('status', 'Course removed from the offering grid for '.$session.' Semester '.$semester.'.');

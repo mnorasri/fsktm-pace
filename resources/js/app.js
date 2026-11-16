@@ -17,17 +17,35 @@
         const sidebar = document.getElementById('app-sidebar');
         const backdrop = document.getElementById('sidebar-backdrop');
 
+        const desktop = window.matchMedia('(min-width: 1024px)');
+        let sidebarTrigger = null;
+        const syncScrollLock = () => {
+            const modalOpen = document.querySelector('[data-modal]:not(.hidden)');
+            const sidebarOpen = sidebar && !desktop.matches && !sidebar.classList.contains('-translate-x-full');
+            document.body.classList.toggle('overflow-hidden', Boolean(modalOpen || sidebarOpen));
+        };
+        const setSidebarExpanded = (expanded) => {
+            document.querySelectorAll('[data-sidebar-open]').forEach((button) => button.setAttribute('aria-expanded', String(expanded)));
+            if (sidebar) sidebar.inert = !desktop.matches && !expanded;
+        };
+        setSidebarExpanded(false);
         const openSidebar = () => {
+            sidebarTrigger = document.activeElement;
             sidebar?.classList.remove('-translate-x-full');
             backdrop?.classList.remove('hidden');
-            document.body.classList.add('overflow-hidden');
+            setSidebarExpanded(true);
+            syncScrollLock();
+            sidebar?.querySelector('[data-sidebar-close]')?.focus();
         };
 
         const closeSidebar = () => {
             sidebar?.classList.add('-translate-x-full');
             backdrop?.classList.add('hidden');
-            document.body.classList.remove('overflow-hidden');
+            setSidebarExpanded(false);
+            syncScrollLock();
+            if (sidebar?.contains(document.activeElement)) sidebarTrigger?.focus();
         };
+        desktop.addEventListener('change', closeSidebar);
 
         document.querySelectorAll('[data-sidebar-open]').forEach((el) => el.addEventListener('click', openSidebar));
         document.querySelectorAll('[data-sidebar-close]').forEach((el) => el.addEventListener('click', closeSidebar));
@@ -40,6 +58,7 @@
             document.querySelectorAll('[data-menu]').forEach((menu) => {
                 if (menu === except) return;
                 menu.querySelector('[data-menu-panel]')?.classList.add('hidden');
+                menu.querySelector('[data-menu-toggle]')?.setAttribute('aria-expanded', 'false');
             });
         };
 
@@ -51,6 +70,7 @@
                 if (!panel) return;
                 closeMenus(menu);
                 panel.classList.toggle('hidden');
+                toggle.setAttribute('aria-expanded', String(!panel.classList.contains('hidden')));
             });
         });
 
@@ -59,18 +79,24 @@
         /* ------------------------------------------------------------
          * Modals
          * ---------------------------------------------------------- */
+        const modalTriggers = new WeakMap();
+        const focusable = (root) => [...root.querySelectorAll('a[href], button, input, select, textarea, [tabindex]')].filter((el) => !el.disabled && el.tabIndex >= 0 && el.getClientRects().length);
         const openModal = (id) => {
             const modal = document.getElementById(id);
             if (!modal) return;
+            modalTriggers.set(modal, document.activeElement);
             modal.classList.remove('hidden');
             modal.classList.add('flex');
-            document.body.classList.add('overflow-hidden');
+            syncScrollLock();
+            requestAnimationFrame(() => (modal.querySelector('input:not([type=hidden]), select, textarea') || focusable(modal)[0] || modal).focus());
         };
 
         const closeModal = (modal) => {
+            if (!modal) return;
             modal.classList.add('hidden');
             modal.classList.remove('flex');
-            document.body.classList.remove('overflow-hidden');
+            syncScrollLock();
+            modalTriggers.get(modal)?.focus();
         };
 
         document.querySelectorAll('[data-modal-open]').forEach((trigger) => {
@@ -94,7 +120,18 @@
         });
 
         document.addEventListener('keydown', (event) => {
+            const activeModal = [...document.querySelectorAll('[data-modal]:not(.hidden)')].at(-1);
+            const focusRoot = activeModal || (!desktop.matches && sidebar && !sidebar.classList.contains('-translate-x-full') ? sidebar : null);
+            if (event.key === 'Tab' && focusRoot) {
+                const items = focusable(focusRoot);
+                const first = items[0];
+                const last = items.at(-1);
+                if (!first) { event.preventDefault(); focusRoot.focus(); }
+                else if (event.shiftKey && (document.activeElement === first || !focusRoot.contains(document.activeElement))) { event.preventDefault(); last.focus(); }
+                else if (!event.shiftKey && (document.activeElement === last || !focusRoot.contains(document.activeElement))) { event.preventDefault(); first.focus(); }
+            }
             if (event.key !== 'Escape') return;
+            closeMenus();
             document.querySelectorAll('[data-modal]:not(.hidden)').forEach(closeModal);
             closeSidebar();
         });

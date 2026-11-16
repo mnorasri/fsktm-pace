@@ -85,7 +85,8 @@ test('a lecturer created without a password can sign in with the default', funct
 
     $lecturer = User::where('email', 'suriati@uthm.edu.my')->firstOrFail();
 
-    expect(Hash::check(LecturerController::DEFAULT_PASSWORD, $lecturer->password))->toBeTrue();
+    expect(Hash::check(LecturerController::DEFAULT_PASSWORD, $lecturer->password))->toBeTrue()
+        ->and($lecturer->must_change_password)->toBeTrue();
 
     // Sign out the administrator first: the login page is guest-only.
     auth()->logout();
@@ -93,7 +94,7 @@ test('a lecturer created without a password can sign in with the default', funct
     $this->post(route('login.store'), [
         'email' => 'suriati@uthm.edu.my',
         'password' => LecturerController::DEFAULT_PASSWORD,
-    ])->assertRedirect(route('advisor.dashboard'));
+    ])->assertRedirect(route('password.change'));
 
     $this->assertAuthenticatedAs($lecturer);
 });

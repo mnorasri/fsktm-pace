@@ -12,13 +12,13 @@
     [$chip, $accent] = $tones[$tone] ?? $tones['brand'];
 @endphp
 
-<div class="card card-pad animate-rise">
-    <div class="flex items-start justify-between gap-3">
+<div class="card min-w-0 p-4 sm:p-6 animate-rise">
+    <div class="flex flex-col-reverse items-start justify-between gap-3 sm:flex-row">
         <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">{{ $label }}</p>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ $label }}</p>
             <p class="mt-1.5 text-3xl font-bold tracking-tight text-slate-800">{{ $value }}</p>
         </div>
-        <span class="grid size-11 place-items-center rounded-2xl {{ $chip }}">
+        <span class="grid size-11 shrink-0 place-items-center rounded-2xl {{ $chip }}">
             <x-icon :name="$icon" class="size-5" />
         </span>
     </div>

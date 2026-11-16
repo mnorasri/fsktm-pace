@@ -10,6 +10,7 @@ use App\Models\Program;
 use App\Models\Sdg;
 use App\Models\Setting;
 use App\Models\Vbe;
+use App\Support\RegistrationSchedule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -92,6 +93,8 @@ class ConfigController extends Controller
         return view('admin.configs', [
             'activeSession' => Setting::get('active_session', '2025/2026'),
             'activeSemester' => Setting::get('active_semester', '1'),
+            'offeringCutoff' => RegistrationSchedule::offeringCutoff()?->toDateString(),
+            'registrationCutoff' => RegistrationSchedule::registrationCutoff()?->toDateString(),
             'departments' => Department::orderBy('code')->get(),
             'programs' => Program::with('department')->orderBy('code')->get(),
             'courseTypes' => CourseType::orderBy('code')->get(),
@@ -112,6 +115,28 @@ class ConfigController extends Controller
         Setting::put('active_semester', $data['active_semester']);
 
         return back()->with('status', 'Active academic term updated to '.$data['active_session'].' Semester '.$data['active_semester'].'.');
+    }
+
+    /**
+     * Save the two dates that open and close course registration.
+     */
+    public function schedule(Request $request): RedirectResponse
+    {
+        $rules = [
+            'offering_cutoff_date' => ['nullable', 'date'],
+            'registration_cutoff_date' => ['nullable', 'date'],
+        ];
+
+        if ($request->filled('offering_cutoff_date')) {
+            $rules['registration_cutoff_date'][] = 'after_or_equal:offering_cutoff_date';
+        }
+
+        $data = $request->validate($rules);
+
+        Setting::put(RegistrationSchedule::OFFERING_CUTOFF_KEY, $data['offering_cutoff_date'] ?: null);
+        Setting::put(RegistrationSchedule::REGISTRATION_CUTOFF_KEY, $data['registration_cutoff_date'] ?: null);
+
+        return back()->with('status', 'Registration schedule updated.');
     }
 
     public function store(Request $request, string $type): RedirectResponse

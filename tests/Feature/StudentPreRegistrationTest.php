@@ -7,6 +7,7 @@ use App\Models\PreRegistration;
 use App\Models\Program;
 use App\Models\Setting;
 use App\Models\User;
+use App\Support\RegistrationSchedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
@@ -171,4 +172,85 @@ test('an offered course is disabled once the credit cap is reached', function ()
 
     expect($html)->toContain('Credit cap reached — remove a course before adding '.$even->code)
         ->and(substr_count($html, 'btn-primary btn-sm'))->toBe(0);
+});
+
+test('students cannot choose courses before the offering cutoff has passed', function () {
+    [$student, $plan, $odd] = makePreRegStudent();
+
+    Setting::put('active_session', '20262027');
+    Setting::put('active_semester', '2');
+
+    // The HoD may still change offerings today, so students wait until tomorrow.
+    Setting::put(RegistrationSchedule::OFFERING_CUTOFF_KEY, now()->toDateString());
+
+    $offered = offerInActiveTerm($odd);
+
+    $html = $this->actingAs($student)->get(route('student.pre-registration'))->assertOk()->getContent();
+
+    expect($html)->toContain('Course registration is not open')
+        ->and($html)->toContain('Course registration opens on '.now()->addDay()->format('d M Y'))
+        ->and(substr_count($html, 'btn-primary btn-sm'))->toBe(0);
+
+    $this->actingAs($student)
+        ->post(route('student.pre-registration.store', $offered))
+        ->assertSessionHasErrors('offering');
+
+    expect(PreRegistration::where('offering_id', $offered->id)->exists())->toBeFalse();
+});
+
+test('students may choose courses between the offering and registration cutoffs', function () {
+    [$student, $plan, $odd] = makePreRegStudent();
+
+    Setting::put('active_session', '20262027');
+    Setting::put('active_semester', '2');
+
+    Setting::put(RegistrationSchedule::OFFERING_CUTOFF_KEY, now()->subDay()->toDateString());
+    Setting::put(RegistrationSchedule::REGISTRATION_CUTOFF_KEY, now()->addDays(3)->toDateString());
+
+    $offered = offerInActiveTerm($odd);
+
+    $html = $this->actingAs($student)->get(route('student.pre-registration'))->assertOk()->getContent();
+
+    expect($html)->not->toContain('Course registration is not open')
+        ->and(substr_count($html, 'btn-primary btn-sm'))->toBe(1);
+
+    $this->actingAs($student)
+        ->post(route('student.pre-registration.store', $offered))
+        ->assertSessionHasNoErrors();
+
+    expect(PreRegistration::where('offering_id', $offered->id)->exists())->toBeTrue();
+});
+
+test('student changes are refused after the registration cutoff', function () {
+    [$student, $plan, $odd, $even] = makePreRegStudent();
+
+    Setting::put('active_session', '20262027');
+    Setting::put('active_semester', '2');
+    Setting::put(RegistrationSchedule::REGISTRATION_CUTOFF_KEY, now()->subDay()->toDateString());
+
+    $offered = offerInActiveTerm($odd);
+    $other = offerInActiveTerm($even);
+
+    $registration = PreRegistration::create([
+        'user_id' => $student->id,
+        'offering_id' => $offered->id,
+        'session' => '20262027',
+        'semester' => '2',
+        'credits' => 3,
+        'status' => 'pending',
+    ]);
+
+    $this->actingAs($student)
+        ->post(route('student.pre-registration.store', $other))
+        ->assertSessionHasErrors('offering');
+
+    $this->actingAs($student)
+        ->delete(route('student.pre-registration.destroy', $registration))
+        ->assertSessionHasErrors('registration');
+
+    $this->actingAs($student)
+        ->post(route('student.pre-registration.submit'))
+        ->assertSessionHasErrors('registration');
+
+    expect(PreRegistration::whereKey($registration->id)->exists())->toBeTrue();
 });

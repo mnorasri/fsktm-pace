@@ -12,6 +12,7 @@
     </head>
     <body class="h-full bg-slate-100 font-sans text-slate-800 antialiased">
         @php($pageTitle = trim(strip_tags($__env->yieldContent('title'))) ?: 'Dashboard')
+        <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-xl focus:bg-white focus:px-4 focus:py-3 focus:text-brand-700">Skip to content</a>
         <div class="flex min-h-full">
             @include('partials.sidebar')
 
@@ -20,7 +21,7 @@
             <div class="flex min-w-0 flex-1 flex-col lg:pl-72">
                 @include('partials.topbar')
 
-                <main class="flex-1 px-4 py-6 sm:px-6 lg:px-8">
+                <main id="main-content" tabindex="-1" class="flex-1 px-4 py-6 sm:px-6 lg:px-8">
                     @yield('content')
                 </main>
 

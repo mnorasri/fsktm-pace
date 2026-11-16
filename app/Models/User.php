@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\DB;
     'name', 'email', 'password', 'role', 'student_id', 'staff_id',
     'department_id', 'program_id', 'plan_id', 'advisor_id', 'phone',
     'is_hod', 'status', 'plan_status', 'plan_submitted_at',
-    'plan_reviewed_by', 'plan_review_note',
+    'plan_reviewed_by', 'plan_review_note', 'must_change_password',
 ])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
@@ -42,6 +42,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_hod' => 'boolean',
+            'must_change_password' => 'boolean',
             'plan_submitted_at' => 'datetime',
         ];
     }

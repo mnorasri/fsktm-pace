@@ -54,7 +54,10 @@ class StudentController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $attributes = $this->validated($request);
-        $attributes['password'] = Hash::make($request->input('password') ?: self::DEFAULT_PASSWORD);
+        $password = $request->input('password');
+
+        $attributes['password'] = Hash::make($password ?: self::DEFAULT_PASSWORD);
+        $attributes['must_change_password'] = blank($password) || $password === self::DEFAULT_PASSWORD;
 
         $student = User::create($attributes + ['role' => User::ROLE_STUDENT]);
         $this->syncDepartment($student);
@@ -70,6 +73,9 @@ class StudentController extends Controller
 
         if (filled($request->input('password'))) {
             $attributes['password'] = Hash::make($request->input('password'));
+            // A password set by the administrator is their own choice; only
+            // the shared default has to be replaced at the next sign-in.
+            $attributes['must_change_password'] = $request->input('password') === self::DEFAULT_PASSWORD;
         }
 
         $student->update($attributes);
@@ -92,7 +98,10 @@ class StudentController extends Controller
         abort_unless($student->role === User::ROLE_STUDENT, 404);
 
         $password = Str::password(10);
-        $student->update(['password' => Hash::make($password)]);
+        $student->update([
+            'password' => Hash::make($password),
+            'must_change_password' => true,
+        ]);
 
         return back()
             ->with('status', 'Password reset for '.$student->name.'.')
@@ -202,8 +211,12 @@ class StudentController extends Controller
             'role' => User::ROLE_STUDENT,
         ];
 
+        // Blank cells fall back to the shared default, which has to be replaced
+        // at the first sign-in; a password supplied by the sheet does not.
+        $mustChange = blank($password) || trim((string) $password) === self::DEFAULT_PASSWORD;
+
         // Every row commits on its own, so a failure leaves no partial student.
-        return DB::transaction(function () use ($attributes, $matric, $email, $emailProvided, $password) {
+        return DB::transaction(function () use ($attributes, $matric, $email, $emailProvided, $password, $mustChange) {
             // Match on the matric number first so re-imports update existing
             // students instead of creating duplicates.
             $existing = User::where('student_id', $matric)->first()
@@ -224,7 +237,10 @@ class StudentController extends Controller
 
                 // A blank password leaves the current one untouched.
                 if (filled($password)) {
-                    $existing->update(['password' => $this->passwordFrom($password)]);
+                    $existing->update([
+                        'password' => $this->passwordFrom($password),
+                        'must_change_password' => $mustChange,
+                    ]);
                 }
 
                 return 'updated';
@@ -233,6 +249,7 @@ class StudentController extends Controller
             User::create($attributes + [
                 'email' => $email,
                 'password' => $this->passwordFrom($password),
+                'must_change_password' => $mustChange,
             ]);
 
             return 'created';

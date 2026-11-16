@@ -50,7 +50,13 @@ class LecturerController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        User::create($this->validated($request) + [
+        $attributes = $this->validated($request);
+
+        // No password supplied means the shared default, which must be changed
+        // at the first sign-in.
+        $attributes['must_change_password'] ??= true;
+
+        User::create($attributes + [
             'role' => User::ROLE_ADVISOR,
             'password' => $this->passwordFrom($request->input('password')),
         ]);
@@ -84,7 +90,10 @@ class LecturerController extends Controller
         abort_unless($lecturer->role === User::ROLE_ADVISOR, 404);
 
         $password = Str::password(10);
-        $lecturer->update(['password' => Hash::make($password)]);
+        $lecturer->update([
+            'password' => Hash::make($password),
+            'must_change_password' => true,
+        ]);
 
         return back()
             ->with('status', 'Password reset for '.$lecturer->name.'.')
@@ -175,8 +184,12 @@ class LecturerController extends Controller
             'role' => User::ROLE_ADVISOR,
         ];
 
+        // A blank cell falls back to the shared default, which has to be
+        // replaced at the first sign-in; a supplied password does not.
+        $mustChange = blank($password) || trim((string) $password) === self::DEFAULT_PASSWORD;
+
         // Every row commits on its own, so a failure leaves no partial lecturer.
-        return DB::transaction(function () use ($attributes, $staffId, $email, $emailProvided, $password) {
+        return DB::transaction(function () use ($attributes, $staffId, $email, $emailProvided, $password, $mustChange) {
             // The staff ID is the lecturer's key: a row that keeps its staff ID
             // updates that lecturer even when the email column changes. Email
             // is accepted as a fallback for older sheets.
@@ -200,7 +213,10 @@ class LecturerController extends Controller
 
                 // A blank password leaves the current one untouched.
                 if (filled($password)) {
-                    $existing->update(['password' => $this->passwordFrom($password)]);
+                    $existing->update([
+                        'password' => $this->passwordFrom($password),
+                        'must_change_password' => $mustChange,
+                    ]);
                 }
 
                 return ['status' => 'updated', 'hashed' => $hashed];
@@ -209,6 +225,7 @@ class LecturerController extends Controller
             User::create($attributes + [
                 'email' => $email,
                 'password' => $this->passwordFrom($password),
+                'must_change_password' => $mustChange,
             ]);
 
             return ['status' => 'created', 'hashed' => $hashed];
@@ -266,7 +283,11 @@ class LecturerController extends Controller
         ]);
 
         if (filled($data['password'] ?? null)) {
-            $data['password'] = $this->passwordFrom($data['password']);
+            $plain = $data['password'];
+            $data['password'] = $this->passwordFrom($plain);
+            // A password chosen by the administrator is their own choice;
+            // only the shared default has to be replaced at sign-in.
+            $data['must_change_password'] = $plain === self::DEFAULT_PASSWORD;
         } else {
             unset($data['password']);
         }

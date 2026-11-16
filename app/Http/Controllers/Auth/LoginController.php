@@ -14,7 +14,9 @@ class LoginController extends Controller
     public function show(): View|RedirectResponse
     {
         if (Auth::check()) {
-            return redirect()->route(Auth::user()->dashboardRoute());
+            return redirect()->route(
+                Auth::user()->must_change_password ? 'password.change' : Auth::user()->dashboardRoute()
+            );
         }
 
         return view('auth.login');
@@ -44,6 +46,13 @@ class LoginController extends Controller
         }
 
         $request->session()->regenerate();
+
+        // A default password is a first sign-in: choose a new one before the
+        // rest of the portal opens.
+        if ($user->must_change_password) {
+            return redirect()->route('password.change')
+                ->with('status', 'Welcome, '.str($user->name)->before(' ').'! Please choose a new password.');
+        }
 
         return redirect()->intended(route($user->dashboardRoute()))
             ->with('status', 'Welcome back, '.str($user->name)->before(' ').'!');

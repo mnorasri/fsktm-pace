@@ -9,6 +9,7 @@ use App\Models\PreRegistration;
 use App\Models\Program;
 use App\Models\Setting;
 use App\Models\User;
+use App\Support\RegistrationSchedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 
@@ -276,4 +277,27 @@ test('the HoD can reset sections, lecturers and the coordinator of an offering',
 
     expect($offering->section)->toBe('01')
         ->and($offering->coordinator_id)->toBeNull();
+});
+
+test('manage offering is read-only after the administrator cutoff', function () {
+    [$hod, $offering, $norasri] = makeOfferingWithPakGroups();
+
+    Setting::put(RegistrationSchedule::OFFERING_CUTOFF_KEY, now()->subDay()->toDateString());
+
+    $this->actingAs($hod)
+        ->get(route('advisor.offering.manage'))
+        ->assertOk()
+        ->assertSee('Course offering closed')
+        ->assertSee('Closed');
+
+    // The middleware refuses a crafted section save even though the control is
+    // disabled in the page.
+    $this->actingAs($hod)
+        ->post(route('advisor.offering.section.store', $offering), [
+            'section' => '02',
+            'lecturer_id' => $norasri->id,
+        ])
+        ->assertSessionHasErrors('offering');
+
+    expect(OfferingSection::where('offering_id', $offering->id)->count())->toBe(0);
 });

@@ -64,7 +64,10 @@ class ProfileController extends Controller
         $user = $request->user();
 
         // The User model hashes the value on the way in.
-        $user->update(['password' => $data['password']]);
+        $user->update([
+            'password' => $data['password'],
+            'must_change_password' => false,
+        ]);
 
         return back()->with('status', 'Your password has been changed.');
     }

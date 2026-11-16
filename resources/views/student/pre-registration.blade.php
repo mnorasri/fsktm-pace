@@ -15,6 +15,19 @@
         </x-slot:actions>
     </x-page-header>
 
+    @if (! $windowOpen)
+        <div class="mb-5 flex flex-wrap items-start gap-3 rounded-3xl border border-amber-200 bg-amber-50 p-5">
+            <span class="grid size-9 shrink-0 place-items-center rounded-2xl bg-amber-100 text-amber-600">
+                <x-icon name="lock" class="size-5" />
+            </span>
+            <div class="min-w-[16rem] flex-1">
+                <p class="text-sm font-bold text-amber-900">Course registration is not open</p>
+                <p class="mt-1 text-sm text-amber-800">{{ $windowClosedReason }}</p>
+            </div>
+            <x-badge tone="amber" dot>Closed</x-badge>
+        </div>
+    @endif
+
     {{-- The term's pre-registration is sent to the advisor as one batch. --}}
     @if ($planApproved)
         @php
@@ -80,7 +93,7 @@
                 </div>
                 <form method="POST" action="{{ route('student.pre-registration.submit') }}" data-scroll-keep>
                     @csrf
-                    <button class="btn-primary" @disabled($registrationCount === 0)>
+                    <button class="btn-primary" @disabled($registrationCount === 0 || ! $windowOpen)>
                         <x-icon name="check" class="size-4" /> Submit for approval
                     </button>
                 </form>
@@ -186,7 +199,7 @@
 
                                             <div class="ml-auto flex flex-wrap items-center gap-2">
                                                 @if ($row['selected'])
-                                                    @if ($row['registration']->status === 'pending' && ! $registrationLocked)
+                                                    @if ($row['registration']->status === 'pending' && ! $registrationLocked && $windowOpen)
                                                         <form method="POST" action="{{ route('student.pre-registration.destroy', $row['registration']) }}"
                                                             data-confirm="Remove this pre-registration request?" data-scroll-keep>
                                                             @csrf
@@ -279,7 +292,7 @@
                     </div>
                     <div class="mt-2 flex items-center justify-between">
                         <span class="text-xs font-semibold text-slate-500">{{ $registration->credits }} credits</span>
-                        @if ($registration->status === 'pending' && ! $registrationLocked)
+                        @if ($registration->status === 'pending' && ! $registrationLocked && $windowOpen)
                             <form method="POST" action="{{ route('student.pre-registration.destroy', $registration) }}" data-scroll-keep>
                                 @csrf
                                 @method('DELETE')

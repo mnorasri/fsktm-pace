@@ -21,6 +21,24 @@
         offerings — published courses appear highlighted.
     </p>
 
+    @if (! $offeringWindowOpen && $offeringCutoff)
+        <div class="mb-5 flex flex-wrap items-start gap-3 rounded-3xl border border-amber-200 bg-amber-50 p-4 no-print">
+            <span class="grid size-9 shrink-0 place-items-center rounded-2xl bg-amber-100 text-amber-600">
+                <x-icon name="lock" class="size-5" />
+            </span>
+            <div class="min-w-[16rem] flex-1">
+                <p class="text-sm font-bold text-amber-900">
+                    Course offering closed on {{ $offeringCutoff->format('d M Y') }}
+                </p>
+                <p class="mt-0.5 text-sm text-amber-800">
+                    Only an administrator can add or remove offered courses now. Students may start
+                    choosing courses the day after the cutoff.
+                </p>
+            </div>
+            <x-badge tone="amber" dot>Closed</x-badge>
+        </div>
+    @endif
+
     <form method="GET" class="card card-pad no-print mb-5 flex flex-wrap items-end gap-3">
         <div class="w-full sm:w-[26rem]">
             <span class="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Course plan</span>
@@ -128,7 +146,7 @@
                                                             <x-badge tone="slate">Slot</x-badge>
                                                         </div>
                                                     @else
-                                                        <x-offering-toggle :course="$course" :plan="$plan"
+                                                        <x-offering-toggle :course="$course" :plan="$plan" :window-open="$offeringWindowOpen"
                                                             :offered="isset($existing[$course->id])"
                                                             :year="$year" />
                                                     @endif
@@ -180,7 +198,7 @@
                                             <x-badge tone="slate">Slot</x-badge>
                                         </div>
                                     @else
-                                        <x-offering-toggle :course="$course" :plan="$plan"
+                                        <x-offering-toggle :course="$course" :plan="$plan" :window-open="$offeringWindowOpen"
                                             :offered="isset($existing[$course->id])" />
                                     @endif
                                 @endforeach
@@ -222,7 +240,7 @@
                                             <x-badge tone="slate">Slot</x-badge>
                                         </div>
                                     @else
-                                        <x-offering-toggle :course="$course" :plan="$plan"
+                                        <x-offering-toggle :course="$course" :plan="$plan" :window-open="$offeringWindowOpen"
                                             :offered="isset($existing[$course->id])" />
                                     @endif
                                 @endforeach

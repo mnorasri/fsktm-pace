@@ -110,7 +110,7 @@
 
     /* Surfaces ------------------------------------------------------- */
     .card {
-        @apply rounded-3xl border border-slate-200/70 bg-white shadow-sm shadow-slate-200/40;
+        @apply min-w-0 rounded-2xl border border-slate-200/70 bg-white shadow-sm shadow-slate-200/40;
     }
 
     .card-pad {
@@ -341,3 +341,30 @@
 /* Hide the default disclosure triangle on <summary> */
 details > summary { list-style: none; }
 details > summary::-webkit-details-marker { display: none; }
+
+/* Shared controls stay readable and usable in dense management screens. */
+@layer base {
+    button, a, input, select, textarea {
+        -webkit-tap-highlight-color: transparent;
+    }
+    button:not(:disabled), select { cursor: pointer; }
+    :focus-visible { outline: 2px solid var(--color-brand-600); outline-offset: 3px; }
+}
+@layer components {
+    .data-table { min-width: 38rem; }
+    .data-table th { white-space: nowrap; }
+    .data-table td { overflow-wrap: anywhere; }
+    [data-modal] { overscroll-behavior: contain; }
+    [data-modal] .font-mono { overflow-wrap: anywhere; }
+    @media (max-width: 639px) {
+        .card-header { padding: 1rem; }
+        .btn-sm { min-height: 2.25rem; }
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}

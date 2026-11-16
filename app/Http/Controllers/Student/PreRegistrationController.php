@@ -10,6 +10,7 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Services\CurriculumService;
 use App\Services\StudyPlanService;
+use App\Support\RegistrationSchedule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
@@ -42,6 +43,11 @@ class PreRegistrationController extends Controller
             ->where('semester', $semester)
             ->get()
             ->keyBy('offering_id');
+
+        // The administrator's schedule decides when students may choose courses:
+        // from the day after the offering cutoff until the registration cutoff.
+        $windowReason = RegistrationSchedule::studentClosedReason();
+        $windowOpen = $windowReason === null;
 
         // The courses the HoD published for the active term, keyed by course.
         $offerings = Offering::with(['course.courseType', 'lecturer', 'coordinator'])
@@ -81,6 +87,8 @@ class PreRegistrationController extends Controller
                     $reason = $submission->status === RegistrationSubmission::STATUS_APPROVED
                         ? 'Registration approved — locked for this term.'
                         : 'Awaiting your advisor’s approval.';
+                } elseif (! $windowOpen) {
+                    $reason = $windowReason;
                 } elseif (! $planApproved) {
                     $reason = 'Awaiting approval of your study plan.';
                 } else {
@@ -103,7 +111,7 @@ class PreRegistrationController extends Controller
                 'selected' => $selected,
                 'capBlocked' => $capBlocked,
                 'awaitingPlan' => $offering !== null && ! $selected && ! $planApproved && ! $registrationLocked,
-                'addable' => ! $registrationLocked && $planApproved && $offering !== null && ! $selected && $eligible && ! $capBlocked,
+                'addable' => $windowOpen && ! $registrationLocked && $planApproved && $offering !== null && ! $selected && $eligible && ! $capBlocked,
                 'reason' => $reason,
             ];
         }
@@ -123,6 +131,8 @@ class PreRegistrationController extends Controller
             'planApproved' => $planApproved,
             'submission' => $submission,
             'registrationLocked' => $registrationLocked,
+            'windowOpen' => $windowOpen,
+            'windowClosedReason' => $windowReason,
             'registrationCount' => $registrations->count(),
             'activeSession' => $session,
             'activeSemester' => $semester,
@@ -135,6 +145,10 @@ class PreRegistrationController extends Controller
         $student = auth()->user();
 
         [$session, $semester] = $this->activeTerm();
+
+        if ($reason = RegistrationSchedule::studentClosedReason()) {
+            return back()->withErrors(['offering' => $reason]);
+        }
 
         $submission = RegistrationSubmission::forTerm($student, $session, $semester);
 
@@ -200,6 +214,11 @@ class PreRegistrationController extends Controller
         /** @var User $student */
         $student = auth()->user();
         [$session, $semester] = $this->activeTerm();
+
+        if ($reason = RegistrationSchedule::studentClosedReason()) {
+            return back()->withErrors(['registration' => $reason]);
+        }
+
         $submission = RegistrationSubmission::forTerm($student, $session, $semester);
 
         abort_if(
@@ -224,6 +243,10 @@ class PreRegistrationController extends Controller
         $student = auth()->user();
 
         [$session, $semester] = $this->activeTerm();
+
+        if ($reason = RegistrationSchedule::studentClosedReason()) {
+            return back()->withErrors(['registration' => $reason]);
+        }
 
         $submission = RegistrationSubmission::forTerm($student, $session, $semester);
 

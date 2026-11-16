@@ -9,16 +9,16 @@
     ];
 @endphp
 
-<div id="{{ $id }}" data-modal class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
-    <div class="max-h-[90vh] w-full {{ $widths[$size] }} overflow-y-auto rounded-3xl bg-white shadow-2xl scroll-thin">
+<div id="{{ $id }}" data-modal role="dialog" aria-modal="true" aria-labelledby="{{ $id }}-title" tabindex="-1" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
+    <div class="max-h-[calc(100dvh-2rem)] w-full {{ $widths[$size] }} overflow-y-auto rounded-3xl bg-white shadow-2xl scroll-thin">
         <div class="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
             <div>
-                <h3 data-modal-title class="text-lg font-semibold text-slate-800">{{ $title }}</h3>
+                <h3 id="{{ $id }}-title" data-modal-title class="text-lg font-semibold text-slate-800">{{ $title }}</h3>
                 @if ($subtitle)
                     <p class="text-sm text-slate-500">{{ $subtitle }}</p>
                 @endif
             </div>
-            <button type="button" data-modal-close class="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
+            <button type="button" data-modal-close aria-label="Close dialog" class="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
                 <x-icon name="x" class="size-5" />
             </button>
         </div>

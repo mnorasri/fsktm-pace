@@ -16,6 +16,24 @@
         </x-slot:actions>
     </x-page-header>
 
+    @if (! $offeringWindowOpen && $offeringCutoff)
+        <div class="mb-5 flex flex-wrap items-start gap-3 rounded-3xl border border-amber-200 bg-amber-50 p-4 no-print">
+            <span class="grid size-9 shrink-0 place-items-center rounded-2xl bg-amber-100 text-amber-600">
+                <x-icon name="lock" class="size-5" />
+            </span>
+            <div class="min-w-[16rem] flex-1">
+                <p class="text-sm font-bold text-amber-900">
+                    Course offering closed on {{ $offeringCutoff->format('d M Y') }}
+                </p>
+                <p class="mt-0.5 text-sm text-amber-800">
+                    Sections, lecturers and coordinators are read-only now. Only an administrator can
+                    change offerings after the cutoff.
+                </p>
+            </div>
+            <x-badge tone="amber" dot>Closed</x-badge>
+        </div>
+    @endif
+
     <form method="GET" class="card card-pad no-print mb-5 flex flex-wrap items-end gap-3">
         <div class="min-w-[16rem] flex-1">
             <span class="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Search</span>
@@ -45,6 +63,10 @@
     @php
         $totalOfferings = $offerings->count();
         $totalRegistered = $offerings->sum('pre_registrations_count');
+
+        // Offering changes stop at the administrator's cutoff date; only an
+        // administrator may still edit after it.
+        $canEditOfferings = $offeringWindowOpen || (auth()->user()?->isAdmin() ?? false);
 
         // The section already saved may sit outside 01–10 (older data): keep it
         // selectable so a save never loses it.
@@ -158,19 +180,19 @@
                                                     <form method="POST" action="{{ route('advisor.offering.section.store', $offering) }}" data-scroll-keep
                                                         class="flex flex-wrap items-center gap-2">
                                                         @csrf
-                                                        <select name="section" class="select py-1.5 text-xs" aria-label="New section number">
+                                                        <select name="section" class="select py-1.5 text-xs" aria-label="New section number" @disabled(! $canEditOfferings)>
                                                             <option value="">None</option>
                                                             @foreach ($sectionOptions as $section)
                                                                 <option value="{{ $section }}">{{ $section }}</option>
                                                             @endforeach
                                                         </select>
-                                                        <select name="lecturer_id" class="select py-1.5 text-xs" aria-label="Lecturer for the new section">
+                                                        <select name="lecturer_id" class="select py-1.5 text-xs" aria-label="Lecturer for the new section" @disabled(! $canEditOfferings)>
                                                             <option value="">Lecturer</option>
                                                             @foreach ($advisors as $advisor)
                                                                 <option value="{{ $advisor->id }}">{{ $advisor->name }}</option>
                                                             @endforeach
                                                         </select>
-                                                        <button class="btn-success btn-sm">Save</button>
+                                                        <button class="btn-success btn-sm" @disabled(! $canEditOfferings)>Save</button>
                                                     </form>
                                                     @php($sectionsForThis = $offeringSections[$offering->id] ?? collect())
                                                     @if ($sectionsForThis->isNotEmpty())
@@ -183,7 +205,7 @@
                                                                         onsubmit="return confirm('Remove section {{ $os->section }}?');">
                                                                         @csrf
                                                                         @method('DELETE')
-                                                                        <button class="btn-ghost btn-sm">
+                                                                        <button class="btn-ghost btn-sm" @disabled(! $canEditOfferings)>
                                                                             <x-icon name="x" class="size-3.5" />
                                                                         </button>
                                                                     </form>
@@ -202,7 +224,7 @@
                                                             onsubmit="return confirm('Reset all section settings for {{ $offering->course->code }}? This clears the sections, assigned lecturers, student section assignments and the coordinator.');">
                                                             @csrf
                                                             @method('DELETE')
-                                                            <button class="btn-danger btn-sm w-full justify-center">
+                                                            <button class="btn-danger btn-sm w-full justify-center" @disabled(! $canEditOfferings)>
                                                                 <x-icon name="arrow-path" class="size-3.5" /> Reset sections
                                                             </button>
                                                         </form>

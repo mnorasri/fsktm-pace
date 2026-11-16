@@ -21,7 +21,7 @@
             <p class="truncate text-sm font-bold leading-tight text-slate-900">FSKTM PACE</p>
             <p class="truncate text-[11px] font-medium text-slate-400">Curriculum Load System</p>
         </div>
-        <button type="button" data-sidebar-close class="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 lg:hidden">
+        <button type="button" data-sidebar-close aria-label="Close navigation" class="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 lg:hidden">
             <x-icon name="x" class="size-5" />
         </button>
     </div>
@@ -34,7 +34,7 @@
         </div>
     </div>
 
-    <nav class="flex-1 space-y-1 overflow-y-auto px-4 py-4 scroll-thin">
+    <nav aria-label="Main navigation" class="flex-1 space-y-1 overflow-y-auto px-4 py-4 scroll-thin">
         @if ($user->isAdmin())
             <p class="nav-group-label">Administration</p>
             <x-nav-link :href="route('admin.dashboard')" icon="home" :active="request()->routeIs('admin.dashboard')">Dashboard</x-nav-link>

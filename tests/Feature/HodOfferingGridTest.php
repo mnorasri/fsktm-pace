@@ -5,8 +5,11 @@ use App\Models\CoursePlan;
 use App\Models\CourseType;
 use App\Models\Offering;
 use App\Models\PlanCourse;
+use App\Models\PreRegistration;
 use App\Models\Program;
+use App\Models\Setting;
 use App\Models\User;
+use App\Support\RegistrationSchedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 
@@ -157,4 +160,118 @@ test('elective courses are listed in their own panel and toggle without a year',
 
     expect($offering->year)->toBeNull()
         ->and($offering->is_offered)->toBeTrue();
+});
+
+test('a head of department can remove an offering inside the offering window', function () {
+    [$hod, $plan, $elective] = makeHodWithOfferingPlan();
+
+    // The administrator's cutoff is still in the future (or unset): the window
+    // is open, so the HoD may switch the course off as well as on.
+    Setting::put(RegistrationSchedule::OFFERING_CUTOFF_KEY, now()->addDay()->toDateString());
+
+    $offering = Offering::create([
+        'course_id' => $elective->id,
+        'session' => '2025/2026',
+        'semester' => '1',
+        'section' => '01',
+        'capacity' => 40,
+        'is_offered' => true,
+    ]);
+
+    $student = User::factory()->create(['role' => 'student']);
+
+    PreRegistration::create([
+        'user_id' => $student->id,
+        'offering_id' => $offering->id,
+        'session' => '2025/2026',
+        'semester' => '1',
+        'credits' => 3,
+        'status' => 'approved',
+    ]);
+
+    $this->actingAs($hod)
+        ->post(route('advisor.offering.toggle'), [
+            'course_id' => $elective->id,
+            'course_plan_id' => $plan->id,
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    // Removing the offering cascades to its registrations, approved included.
+    expect(Offering::whereKey($offering->id)->exists())->toBeFalse()
+        ->and(PreRegistration::where('offering_id', $offering->id)->exists())->toBeFalse();
+});
+
+test('a head of department can add an offering inside the offering window', function () {
+    [$hod, $plan, $elective] = makeHodWithOfferingPlan();
+
+    Setting::put(RegistrationSchedule::OFFERING_CUTOFF_KEY, now()->toDateString());
+
+    $this->actingAs($hod)
+        ->post(route('advisor.offering.toggle'), [
+            'course_id' => $elective->id,
+            'course_plan_id' => $plan->id,
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    expect(Offering::where('course_id', $elective->id)->where('session', '2025/2026')->exists())->toBeTrue();
+});
+
+test('an offering change is refused after the administrator cutoff', function () {
+    [$hod, $plan, $elective] = makeHodWithOfferingPlan();
+
+    Setting::put(RegistrationSchedule::OFFERING_CUTOFF_KEY, now()->subDay()->toDateString());
+
+    $offering = Offering::create([
+        'course_id' => $elective->id,
+        'session' => '2025/2026',
+        'semester' => '1',
+        'section' => '01',
+        'capacity' => 40,
+        'is_offered' => true,
+    ]);
+
+    $this->actingAs($hod)
+        ->post(route('advisor.offering.toggle'), [
+            'course_id' => $elective->id,
+            'course_plan_id' => $plan->id,
+        ])
+        ->assertSessionHasErrors('offering');
+
+    expect(Offering::whereKey($offering->id)->exists())->toBeTrue();
+
+    // The grid shows the closed banner and a locked switch.
+    $this->actingAs($hod)
+        ->get(route('advisor.offering.grid'))
+        ->assertOk()
+        ->assertSee('Course offering closed')
+        ->assertSee('Closed');
+});
+
+test('an administrator can still change offerings after the cutoff', function () {
+    [, $plan, $elective] = makeHodWithOfferingPlan();
+
+    Setting::put(RegistrationSchedule::OFFERING_CUTOFF_KEY, now()->subDay()->toDateString());
+
+    $offering = Offering::create([
+        'course_id' => $elective->id,
+        'session' => '2025/2026',
+        'semester' => '1',
+        'section' => '01',
+        'capacity' => 40,
+        'is_offered' => true,
+    ]);
+
+    $admin = User::factory()->create(['role' => 'admin']);
+
+    $this->actingAs($admin)
+        ->post(route('advisor.offering.toggle'), [
+            'course_id' => $elective->id,
+            'course_plan_id' => $plan->id,
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    expect(Offering::whereKey($offering->id)->exists())->toBeFalse();
 });
