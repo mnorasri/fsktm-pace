@@ -9,7 +9,7 @@
     </head>
     <body class="h-full bg-slate-100 font-sans text-slate-800 antialiased">
         <div class="flex min-h-full items-center justify-center p-6">
-            <div class="w-full max-w-lg">
+            <div class="w-full max-w-md">
                 <div class="mb-6 flex items-center gap-3">
                     <span class="grid size-11 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-indigo-600 text-white shadow-lg shadow-brand-600/30">
                         <x-icon name="academic-cap" class="size-6" />
