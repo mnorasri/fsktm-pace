@@ -326,7 +326,7 @@ class HodOfferingController extends Controller
             'counts.*' => ['required', 'integer', 'min:0'],
         ]);
 
-        $advisorId = (int) $data['advisor_id'];
+        $advisorId = (string) $data['advisor_id'];
         $sections = $data['sections'];
         $counts = $data['counts'];
 
@@ -598,7 +598,7 @@ class HodOfferingController extends Controller
      * Every lecturer attached to a course in the term, one row per assignment:
      * a whole course, a PAK group's own section, or coordinating the course.
      *
-     * @return Collection<int, array{lecturer_id: int, course_id: int, code: string, section: string|null, pak: string|null, coordinating: bool, load: float}>
+     * @return Collection<int, array{lecturer_id: string, course_id: int, code: string, section: string|null, pak: string|null, coordinating: bool, load: float}>
      */
     private function termAssignments(string $session, string $semester): Collection
     {

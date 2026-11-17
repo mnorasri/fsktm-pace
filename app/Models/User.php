@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 #[Fillable([
     'name', 'email', 'password', 'role', 'student_id', 'staff_id',
@@ -24,6 +24,107 @@ class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
+
+    public $incrementing = false;
+
+    public $usesUniqueIds = true;
+
+    protected $keyType = 'string';
+
+    /**
+     * InnoDB cannot cascade a primary-key update back into the users table
+     * itself. Detach and restore the self-references within the same transaction;
+     * foreign keys carry the change through all other tables automatically.
+     */
+    public function save(array $options = []): bool
+    {
+        if (! $this->exists || ! $this->isDirty(['role', 'staff_id', 'student_id', 'id'])) {
+            return parent::save($options);
+        }
+
+        $this->setUniqueIds();
+        $oldId = (string) $this->getRawOriginal('id');
+
+        if ($oldId === $this->id) {
+            return parent::save($options);
+        }
+
+        $connection = $this->getConnection();
+
+        return $connection->transaction(function () use ($connection, $oldId, $options) {
+            $links = [];
+            foreach (['advisor_id', 'plan_reviewed_by'] as $column) {
+                $links[$column] = $connection->table('users')->where($column, $oldId)->pluck('id');
+                $connection->table('users')->where($column, $oldId)->update([$column => null]);
+            }
+
+            $saved = parent::save($options);
+            $newId = $saved ? $this->id : $oldId;
+
+            foreach ($links as $column => $ids) {
+                $ids = $ids->map(fn ($id) => (string) $id === $oldId ? $newId : $id);
+                $connection->table('users')->whereIn('id', $ids)->whereNull($column)->update([$column => $newId]);
+            }
+
+            return $saved;
+        });
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (User $user) {
+            if (! $user->exists || $user->isDirty(['role', 'staff_id', 'student_id'])) {
+                $user->setUniqueIds();
+            }
+        });
+
+        static::updated(function (User $user) {
+            if ($user->wasChanged('id')) {
+                $user->getConnection()->table('sessions')->whereIn('user_id', [
+                    $user->getOriginal('id'), $user->id,
+                ])->delete();
+            }
+        });
+    }
+
+    /**
+     * Assign business identifiers before insert, including event-free seeding.
+     * Administrators retain their numeric identifier in the shared string key.
+     */
+    public function setUniqueIds(): void
+    {
+        $this->role ??= self::ROLE_STUDENT;
+        $field = $this->isStudent() ? 'student_id' : 'staff_id';
+
+        if ($this->isAdmin()) {
+            if (filled($this->id)) {
+                return;
+            }
+
+            $maximum = $this->newQuery()->pluck('id')
+                ->filter(fn ($id) => ctype_digit((string) $id))
+                ->map(fn ($id) => (int) $id)->max() ?? 0;
+            $id = (string) ($maximum + 1);
+        } else {
+            $id = (string) $this->getAttribute($field);
+        }
+
+        if (blank($id) || str_starts_with($id, '__user_key_')) {
+            throw ValidationException::withMessages([$field => 'A valid '.$field.' is required.']);
+        }
+
+        if ($this->newQuery()->whereKey($id)
+            ->when($this->exists, fn ($query) => $query->where('id', '!=', $this->getRawOriginal('id')))
+            ->exists()) {
+            throw ValidationException::withMessages([$field => 'This identifier is already used by another account.']);
+        }
+
+        if ($this->exists && $id !== (string) $this->getRawOriginal('id')) {
+            $this->remember_token = null;
+        }
+
+        $this->id = $id;
+    }
 
     public const ROLE_ADMIN = 'admin';
 
@@ -145,12 +246,12 @@ class User extends Authenticatable
      */
     public function advisor(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'advisor_id', 'staff_id');
+        return $this->belongsTo(User::class, 'advisor_id');
     }
 
     public function advisees(): HasMany
     {
-        return $this->hasMany(User::class, 'advisor_id', 'staff_id');
+        return $this->hasMany(User::class, 'advisor_id');
     }
 
     /**
@@ -161,23 +262,7 @@ class User extends Authenticatable
      */
     public function updateWithStaffId(array $attributes): void
     {
-        $newStaffId = $attributes['staff_id'] ?? $this->staff_id;
-
-        if (blank($this->staff_id) || blank($newStaffId) || $newStaffId === $this->staff_id) {
-            $this->update($attributes);
-
-            return;
-        }
-
-        DB::transaction(function () use ($attributes, $newStaffId) {
-            $adviseeIds = static::query()->where('advisor_id', $this->staff_id)->pluck('id');
-
-            // The constraint blocks a rename while students still point at the
-            // old value, so detach them for the moment the parent changes.
-            static::query()->whereIn('id', $adviseeIds)->update(['advisor_id' => null]);
-            $this->update($attributes);
-            static::query()->whereIn('id', $adviseeIds)->update(['advisor_id' => $newStaffId]);
-        });
+        $this->getConnection()->transaction(fn () => $this->update($attributes));
     }
 
     public function registrationSubmissions(): HasMany

@@ -54,7 +54,7 @@ class DashboardController extends Controller
             return $this->buildRow($student, $session, $semester);
         });
 
-        $selectedId = (int) request()->query('student', 0);
+        $selectedId = request()->string('student')->value();
         $selected = $students->first(fn (array $row) => $row['student']->id === $selectedId);
 
         // Default to the first advisee so the panel is never empty on arrival.
@@ -76,7 +76,7 @@ class DashboardController extends Controller
 
         $session = Setting::get('active_session');
         $semester = Setting::get('active_semester');
-        $studentId = (int) request()->query('student', 0);
+        $studentId = request()->string('student')->value();
 
         // Scoped to the advisor's own advisees, so a stranger's id 404s.
         $student = $this->adviseeQuery($advisor, $session, $semester)->find($studentId);

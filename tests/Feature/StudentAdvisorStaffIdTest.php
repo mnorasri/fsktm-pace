@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\LecturerController;
 use App\Http\Controllers\Admin\StudentController;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
@@ -19,17 +20,15 @@ test('a student links to their advisor through the advisor staff id', function (
         ->and($advisor->advisees()->first()->is($student))->toBeTrue();
 });
 
-test('a numeric advisor reference no longer resolves to an advisor', function () {
+test('an unknown numeric advisor reference is rejected', function () {
     $advisor = User::factory()->create(['role' => 'advisor', 'staff_id' => 'norasri']);
 
-    // Legacy rows stored the advisor's user id; they must not match an advisor.
-    $student = User::factory()->create([
+    expect(fn () => User::factory()->create([
         'role' => 'student',
-        'advisor_id' => (string) $advisor->id,
-    ]);
+        'advisor_id' => '999999',
+    ]))->toThrow(QueryException::class);
 
-    expect($student->advisor)->toBeNull()
-        ->and($advisor->advisees()->count())->toBe(0);
+    expect($advisor->advisees()->count())->toBe(0);
 });
 
 test('the student import stores the advisor staff id and the password', function () {

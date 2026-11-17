@@ -25,6 +25,11 @@ class UserFactory extends Factory
     public function definition(): array
     {
         return [
+            'role' => User::ROLE_STUDENT,
+            'student_id' => fn (array $attributes) => $attributes['role'] === User::ROLE_STUDENT
+                ? fake()->unique()->bothify('T########') : null,
+            'staff_id' => fn (array $attributes) => $attributes['role'] === User::ROLE_ADVISOR
+                ? fake()->unique()->bothify('staff########') : null,
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),

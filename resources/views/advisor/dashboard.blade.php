@@ -195,8 +195,8 @@
                     .then((html) => {
                         detail.innerHTML = html;
                         window.bindDynamicBehaviours?.(detail);
-                        const match = url.match(/[?&]student=(\d+)/);
-                        setActive(match ? match[1] : null);
+                        const studentId = new URL(url, window.location.origin).searchParams.get('student');
+                        setActive(studentId);
                         if (pushUrl) history.pushState(null, '', pushUrl);
                     })
                     .catch(() => {

@@ -178,7 +178,7 @@ test('renaming a staff id carries the advisees along', function () {
         'staff_id' => 'newstaff',
     ])->assertSessionHasNoErrors();
 
-    expect($advisor->fresh()->staff_id)->toBe('newstaff')
+    expect(User::findOrFail('newstaff')->staff_id)->toBe('newstaff')
         ->and($student->fresh()->advisor_id)->toBe('newstaff');
 });
 

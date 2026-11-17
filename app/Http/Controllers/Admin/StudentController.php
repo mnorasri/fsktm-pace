@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use RuntimeException;
@@ -442,8 +443,8 @@ class StudentController extends Controller
     {
         return $request->validate([
             'name' => ['required', 'string', 'max:150'],
-            'email' => ['required', 'email', 'max:180', 'unique:users,email'.($student ? ','.$student->id : '')],
-            'student_id' => ['required', 'string', 'max:30', 'unique:users,student_id'.($student ? ','.$student->id : '')],
+            'email' => ['required', 'email', 'max:180', Rule::unique('users', 'email')->ignore($student)],
+            'student_id' => ['required', 'string', 'max:30', Rule::unique('users', 'student_id')->ignore($student)],
             'program_id' => ['nullable', 'exists:programs,id'],
             'plan_id' => ['nullable', 'exists:course_plans,id'],
             'advisor_id' => ['nullable', 'exists:users,staff_id'],

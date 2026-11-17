@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use RuntimeException;
 use Throwable;
@@ -275,8 +276,8 @@ class LecturerController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:150'],
-            'email' => ['required', 'email', 'max:180', 'unique:users,email'.($lecturer ? ','.$lecturer->id : '')],
-            'staff_id' => ['required', 'string', 'max:30', 'unique:users,staff_id'.($lecturer ? ','.$lecturer->id : '')],
+            'email' => ['required', 'email', 'max:180', Rule::unique('users', 'email')->ignore($lecturer)],
+            'staff_id' => ['required', 'string', 'max:30', Rule::unique('users', 'staff_id')->ignore($lecturer)],
             'department_id' => ['nullable', 'exists:departments,id'],
             'phone' => ['nullable', 'string', 'max:30'],
             'status' => ['nullable', 'in:active,inactive'],
