@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers\Advisor;
 
+use App\Http\Controllers\Concerns\BuildsStudyPlanCsv;
 use App\Http\Controllers\Concerns\ImportsCsv;
 use App\Http\Controllers\Controller;
 use App\Models\Course;
 use App\Models\CoursePlan;
-use App\Models\CourseType;
 use App\Models\PlanCourse;
 use App\Models\Program;
 use Illuminate\Http\RedirectResponse;
@@ -15,6 +15,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
 /**
@@ -27,6 +28,7 @@ use Throwable;
  */
 class HodStudyPlanController extends Controller
 {
+    use BuildsStudyPlanCsv;
     use ImportsCsv;
 
     public const SEMESTER_LABELS = [
@@ -72,6 +74,14 @@ class HodStudyPlanController extends Controller
                 'pinned' => $rows->where('slotted', true)->where('placed', true)->count(),
             ],
         ]);
+    }
+
+    /**
+     * Download the plan that is currently selected on the page.
+     */
+    public function export(CoursePlan $plan): StreamedResponse
+    {
+        return $this->studyPlanCsv($plan);
     }
 
     /**
@@ -287,76 +297,6 @@ class HodStudyPlanController extends Controller
     }
 
     /**
-     * Every row of a plan, from its explicit slots plus the courses attached to
-     * it, ready for the year/semester grid.
-     *
-     * @return Collection<int, array<string, mixed>>
-     */
-    private function rowsFor(CoursePlan $plan): Collection
-    {
-        $slots = $plan->planCourses()
-            ->with('course.courseType')
-            ->orderBy('year')
-            ->orderBy('semester')
-            ->orderBy('id')
-            ->get();
-
-        $pinnedIds = $slots->pluck('course_id')->filter()->all();
-
-        $attached = $plan->courses()
-            ->with('courseType')
-            ->whereNotIn('id', $pinnedIds)
-            ->orderBy('semester')
-            ->orderBy('course_code')
-            ->get();
-
-        $rows = collect();
-
-        foreach ($slots as $slot) {
-            // A row can be on the plan without a term — electives are added
-            // that way, for example — and it waits in "Courses without a term".
-            $placed = $slot->year !== null && $slot->semester !== null;
-
-            $rows->push([
-                'key' => 'slot-'.$slot->id,
-                'plan_course' => $slot,
-                'course' => $slot->course,
-                'code' => $slot->course?->code ?? $this->placeholderLabel($slot),
-                'name' => $slot->course?->name ?? 'Elective option — the student picks the course',
-                'year' => $placed ? max(1, (int) $slot->year) : null,
-                'semester' => $placed ? max(1, min(3, (int) $slot->semester)) : null,
-                'category' => $slot->category ?: 'required',
-                'credits' => (int) ($slot->credits ?? $slot->course?->credits ?? 0),
-                'slotted' => true,
-                'placed' => $placed,
-            ]);
-        }
-
-        foreach ($attached as $course) {
-            $semester = (int) $course->semester;
-            // Semesters 1–10 have a place in the curriculum; anything else
-            // (the elective catalogue's 99, or an unset semester) has no term.
-            $placed = $semester >= 1 && $semester <= 10;
-
-            $rows->push([
-                'key' => 'course-'.$course->id,
-                'plan_course' => null,
-                'course' => $course,
-                'code' => $course->code,
-                'name' => $course->name,
-                'year' => $placed ? (int) ceil($semester / 2) : null,
-                'semester' => $placed ? ($semester % 2 === 1 ? 1 : 2) : null,
-                'category' => $this->defaultCategory($course),
-                'credits' => (int) $course->credits,
-                'slotted' => false,
-                'placed' => $placed,
-            ]);
-        }
-
-        return $rows;
-    }
-
-    /**
      * Years → semesters → rows, mirroring the student study grid. The special
      * semester only appears when the plan actually uses one.
      *
@@ -394,27 +334,6 @@ class HodStudyPlanController extends Controller
         }
 
         return ['years' => $years, 'semesters' => $semesters, 'maxYear' => $maxYear];
-    }
-
-    /**
-     * The plan category a course belongs to, taken from its course type.
-     */
-    private function defaultCategory(Course $course): string
-    {
-        $type = mb_strtoupper((string) $course->courseType?->code);
-
-        return match (true) {
-            in_array($type, [CourseType::ELECTIVE_COURSE, CourseType::ELECTIVE_OPTION], true) => 'elective',
-            $type === 'CT01' => 'university',
-            default => 'required',
-        };
-    }
-
-    private function placeholderLabel(PlanCourse $slot): string
-    {
-        $label = str_replace('_', ' ', (string) $slot->placeholder_key);
-
-        return ucfirst(mb_strtolower(trim($label))) ?: 'Elective slot';
     }
 
     private function semesterLabel(int|string $semester): string

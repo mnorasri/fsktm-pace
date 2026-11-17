@@ -285,6 +285,125 @@ test('a study plan can be created, updated and deleted', function () {
     $this->assertDatabaseMissing('course_plans', ['id' => $plan->id]);
 });
 
+test('a study plan can be exported as CSV from the plan list', function () {
+    $context = curriculumContext();
+
+    $plan = CoursePlan::create([
+        'program_id' => $context['program']->id,
+        'code' => 'BIK2025-LOCAL',
+        'name' => 'BIK Local Students',
+        'version' => '2025',
+        'total_semester' => 8,
+    ]);
+
+    $course = Course::create([
+        'code' => 'BIK 10103',
+        'name' => 'Programming Technique I',
+        'credits' => 3,
+        'semester' => 1,
+    ]);
+
+    PlanCourse::create([
+        'course_plan_id' => $plan->id,
+        'course_id' => $course->id,
+        'year' => 1,
+        'semester' => 1,
+        'category' => 'required',
+        'credits' => 3,
+    ]);
+
+    // An elective without a term is exported too, with empty term cells.
+    $elective = Course::create([
+        'code' => 'BIK 29903',
+        'name' => 'Elective Option',
+        'credits' => 3,
+        'semester' => 99,
+    ]);
+
+    PlanCourse::create([
+        'course_plan_id' => $plan->id,
+        'course_id' => $elective->id,
+        'year' => null,
+        'semester' => null,
+        'category' => 'elective',
+        'credits' => 3,
+    ]);
+
+    // The export lives on the plan row, not in the page header: a plan is
+    // picked first, then its curriculum is downloaded.
+    $this->actingAs($context['hod'])
+        ->get(route('curriculum.study-plans.index'))
+        ->assertOk()
+        ->assertSee(route('curriculum.study-plans.export', $plan), false);
+
+    $response = $this->actingAs($context['hod'])
+        ->get(route('curriculum.study-plans.export', $plan))
+        ->assertOk()
+        ->assertDownload('study-plan-bik2025-local.csv');
+
+    expect($response->headers->get('content-type'))->toContain('text/csv');
+
+    $csv = $response->streamedContent();
+
+    expect($csv)
+        ->toContain('study_plan_code,course_code,course_name,year,semester,category,credits')
+        ->toContain('BIK2025-LOCAL,"BIK 10103","Programming Technique I",1,1,required,3')
+        ->toContain('BIK2025-LOCAL,"BIK 29903","Elective Option",,,elective,3');
+});
+
+test('the study plan export is scoped to the plan a manager handles', function () {
+    $context = curriculumContext();
+
+    $mine = CoursePlan::create([
+        'program_id' => $context['program']->id,
+        'code' => 'BIK2025-LOCAL',
+        'name' => 'BIK Local Students',
+    ]);
+
+    $otherProgram = Program::create([
+        'department_id' => $context['department']->id,
+        'code' => 'BIT',
+        'name' => 'Bachelor of Information Technology',
+        'duration_years' => 3,
+    ]);
+
+    $other = CoursePlan::create([
+        'program_id' => $otherProgram->id,
+        'code' => 'BIT2025-LOCAL',
+        'name' => 'BIT Local Students',
+    ]);
+
+    // A Head of Program exports plans of the programmes they head only.
+    $this->actingAs($context['hop'])
+        ->get(route('curriculum.study-plans.export', $mine))
+        ->assertOk();
+
+    $this->actingAs($context['hop'])
+        ->get(route('curriculum.study-plans.export', $other))
+        ->assertForbidden();
+
+    // The administrator can export any plan.
+    $this->actingAs($context['admin'])
+        ->get(route('curriculum.study-plans.export', $other))
+        ->assertOk();
+});
+
+test('the study plan export is only open to curriculum managers', function () {
+    $context = curriculumContext();
+
+    $plan = CoursePlan::create([
+        'program_id' => $context['program']->id,
+        'code' => 'BIK2025-LOCAL',
+        'name' => 'BIK Local Students',
+    ]);
+
+    foreach (['advisor', 'student'] as $outsider) {
+        $this->actingAs($context[$outsider])
+            ->get(route('curriculum.study-plans.export', $plan))
+            ->assertForbidden();
+    }
+});
+
 test('the study plan import creates valid rows and reports unknown programmes', function () {
     curriculumContext();
 

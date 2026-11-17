@@ -65,6 +65,9 @@
                             <td class="text-center text-sm">{{ $plan->students_count }}</td>
                             <td>
                                 <div class="flex items-center justify-end gap-1.5">
+                                    <a href="{{ route('curriculum.study-plans.export', $plan) }}" class="btn-ghost btn-sm" title="Download this plan's courses as CSV">
+                                        <x-icon name="download" class="size-3.5" /> CSV
+                                    </a>
                                     @if (auth()->user()->isAdmin() || auth()->user()->isHod())
                                         <a href="{{ route('advisor.plans.index', ['plan_id' => $plan->id]) }}" class="btn-ghost btn-sm" title="View the visual year grid">
                                             <x-icon name="calendar" class="size-3.5" /> Grid

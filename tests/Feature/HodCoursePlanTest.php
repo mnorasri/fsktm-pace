@@ -155,6 +155,43 @@ test('the study plan page shows the curriculum year by year', function () {
         ->assertSee('BIK 29903');
 });
 
+test('the selected study plan can be exported as CSV', function () {
+    [$hod, , , $plan] = makeHodWithPlan();
+
+    CourseType::create(['code' => CourseType::ELECTIVE_COURSE, 'name' => 'Elective Courses']);
+
+    // A course attached to the plan: semester 3 sits in Year 2 Semester 1.
+    makePlanCourse('BIK 20103', 3, $plan->id);
+
+    // An elective slot without a term is exported with empty term cells.
+    PlanCourse::create([
+        'course_plan_id' => $plan->id,
+        'course_id' => makePlanCourse('BIK 29903', 99)->id,
+        'year' => null,
+        'semester' => null,
+        'category' => 'elective',
+        'credits' => 3,
+    ]);
+
+    // The export only appears once a plan is selected on the page.
+    $this->actingAs($hod)
+        ->get(route('advisor.plans.index', ['plan_id' => $plan->id]))
+        ->assertOk()
+        ->assertSee(route('advisor.plans.export', $plan), false);
+
+    $response = $this->actingAs($hod)
+        ->get(route('advisor.plans.export', $plan))
+        ->assertOk()
+        ->assertDownload('study-plan-bik2025-local.csv');
+
+    $csv = $response->streamedContent();
+
+    expect($csv)
+        ->toContain('study_plan_code,course_code,course_name,year,semester,category,credits')
+        ->toContain('BIK2025-LOCAL,"BIK 20103","BIK 20103 course",2,1,required,3')
+        ->toContain('BIK2025-LOCAL,"BIK 29903","BIK 29903 course",,,elective,3');
+});
+
 test('a head of department can create a new study plan', function () {
     [$hod, , $program] = makeHodWithPlan();
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Curriculum;
 
+use App\Http\Controllers\Concerns\BuildsStudyPlanCsv;
 use App\Http\Controllers\Concerns\ImportsCsv;
 use App\Http\Controllers\Controller;
 use App\Models\CoursePlan;
@@ -11,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
 /**
@@ -20,26 +22,19 @@ use Throwable;
  */
 class StudyPlanController extends Controller
 {
+    use BuildsStudyPlanCsv;
     use ImportsCsv;
 
     public function index(Request $request): View
     {
-        $programIds = auth()->user()->curriculumProgramIds();
-
-        $plans = CoursePlan::query()
+        $plans = $this->plansQuery($request)
             ->with('program.department')
             ->withCount(['planCourses', 'students'])
-            ->when($programIds !== null, fn ($q) => $q->whereIn('program_id', $programIds))
-            ->when($request->filled('program_id'), fn ($q) => $q->where('program_id', $request->integer('program_id')))
-            ->when($request->filled('search'), function ($q) use ($request) {
-                $term = '%'.$request->string('search').'%';
-                $q->where(fn ($inner) => $inner
-                    ->where('code', 'like', $term)
-                    ->orWhere('name', 'like', $term));
-            })
             ->orderBy('code')
             ->paginate(15)
             ->withQueryString();
+
+        $programIds = auth()->user()->curriculumProgramIds();
 
         $programs = Program::query()
             ->when($programIds !== null, fn ($q) => $q->whereIn('id', $programIds))
@@ -50,6 +45,37 @@ class StudyPlanController extends Controller
             'plans' => $plans,
             'programs' => $programs,
         ]);
+    }
+
+    /**
+     * Download one plan's curriculum. A Head of Program may only export plans
+     * of the programmes they head, matching what the list shows them.
+     */
+    public function export(CoursePlan $studyPlan): StreamedResponse
+    {
+        $programIds = auth()->user()->curriculumProgramIds();
+
+        abort_if($programIds !== null && ! in_array((int) $studyPlan->program_id, $programIds, true), 403);
+
+        return $this->studyPlanCsv($studyPlan);
+    }
+
+    /**
+     * The filtered study plan list shared by the page and its CSV export.
+     */
+    private function plansQuery(Request $request)
+    {
+        $programIds = auth()->user()->curriculumProgramIds();
+
+        return CoursePlan::query()
+            ->when($programIds !== null, fn ($q) => $q->whereIn('program_id', $programIds))
+            ->when($request->filled('program_id'), fn ($q) => $q->where('program_id', $request->integer('program_id')))
+            ->when($request->filled('search'), function ($q) use ($request) {
+                $term = '%'.$request->string('search').'%';
+                $q->where(fn ($inner) => $inner
+                    ->where('code', 'like', $term)
+                    ->orWhere('name', 'like', $term));
+            });
     }
 
     public function store(Request $request): RedirectResponse

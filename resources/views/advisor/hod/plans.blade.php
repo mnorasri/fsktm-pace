@@ -9,6 +9,9 @@
         <x-slot:actions>
             <x-badge tone="brand" dot>{{ $plans->count() }} plan{{ $plans->count() === 1 ? '' : 's' }}</x-badge>
             @if ($plan)
+                <a href="{{ route('advisor.plans.export', $plan) }}" class="btn-ghost">
+                    <x-icon name="download" class="size-4" /> Export CSV
+                </a>
                 <button type="button" data-modal-open="import-plan-courses" class="btn-ghost">
                     <x-icon name="upload" class="size-4" /> Import CSV
                 </button>

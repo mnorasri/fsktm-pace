@@ -114,6 +114,7 @@ Route::middleware(['auth', 'password.changed', 'curriculum'])->prefix('curriculu
     Route::delete('/courses/{course}', [CurriculumCourseController::class, 'destroy'])->name('courses.destroy');
 
     Route::get('/study-plans', [CurriculumStudyPlanController::class, 'index'])->name('study-plans.index');
+    Route::get('/study-plans/{studyPlan}/export', [CurriculumStudyPlanController::class, 'export'])->name('study-plans.export');
     Route::post('/study-plans', [CurriculumStudyPlanController::class, 'store'])->name('study-plans.store');
     Route::post('/study-plans/import', [CurriculumStudyPlanController::class, 'import'])->name('study-plans.import');
     Route::put('/study-plans/{studyPlan}', [CurriculumStudyPlanController::class, 'update'])->name('study-plans.update');
@@ -180,6 +181,7 @@ Route::middleware(['auth', 'password.changed', 'hod'])->prefix('advisor')->name(
 
     // Study plans: view the curriculum, create a plan and place courses on it.
     Route::get('/plans', [HodStudyPlanController::class, 'index'])->name('plans.index');
+    Route::get('/plans/{plan}/export', [HodStudyPlanController::class, 'export'])->name('plans.export');
     Route::post('/plans', [HodStudyPlanController::class, 'store'])->name('plans.store');
     Route::post('/plans/{plan}/courses', [HodStudyPlanController::class, 'addCourse'])->name('plans.courses.store');
     Route::post('/plans/{plan}/courses/import', [HodStudyPlanController::class, 'importCourses'])->name('plans.courses.import');

@@ -690,7 +690,7 @@ class HodOfferingController extends Controller
 
         return Response::streamDownload(function () use ($offerings) {
             $out = fopen('php://output', 'w');
-            fputcsv($out, ['Course Code', 'Course Name', 'Section', 'Assigned Lecturer', 'Assigned Coordinator', 'Student Matric No', 'Student Advisor']);
+            fputcsv($out, ['Course Code', 'Course Name', 'Section', 'Assigned Lecturer', 'Assigned Coordinator', 'Student Matric No', 'Student Advisor'], ',', '"', '\\');
 
             foreach ($offerings as $offering) {
                 // Lecturer lookup per section: prefer standalone OfferingSection,
@@ -717,7 +717,7 @@ class HodOfferingController extends Controller
                         $offering->coordinator?->name,
                         '',
                         '',
-                    ]);
+                    ], ',', '"', '\\');
 
                     continue;
                 }
@@ -732,7 +732,7 @@ class HodOfferingController extends Controller
                         $offering->coordinator?->name,
                         $registration->student?->student_id,
                         $registration->student?->advisor?->name,
-                    ]);
+                    ], ',', '"', '\\');
                 }
             }
 
