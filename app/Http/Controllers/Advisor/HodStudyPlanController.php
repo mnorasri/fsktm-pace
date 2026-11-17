@@ -9,6 +9,7 @@ use App\Models\Course;
 use App\Models\CoursePlan;
 use App\Models\PlanCourse;
 use App\Models\Program;
+use App\Support\StudyPlanRows;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -334,6 +335,14 @@ class HodStudyPlanController extends Controller
         }
 
         return ['years' => $years, 'semesters' => $semesters, 'maxYear' => $maxYear];
+    }
+
+    /**
+     * The plan category a course belongs to, taken from its course type.
+     */
+    private function defaultCategory(Course $course): string
+    {
+        return app(StudyPlanRows::class)->defaultCategory($course);
     }
 
     private function semesterLabel(int|string $semester): string

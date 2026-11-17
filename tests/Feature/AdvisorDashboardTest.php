@@ -110,7 +110,7 @@ test('the advisor dashboard shows a supervisee plan as a per-year odd / even gri
         ->and($html)->toContain('No courses in this term');
 });
 
-test('a supervisee who has not built a plan falls back to the empty state', function () {
+test('a supervisee who has not built a plan still shows their curriculum', function () {
     [$advisor, $student] = makeAdvisorWithAdvisee();
 
     $other = User::factory()->create([
@@ -127,12 +127,108 @@ test('a supervisee who has not built a plan falls back to the empty state', func
         ->assertSee('2 course(s) · 6 cr')
         ->assertSee('1 course(s) · 3 cr');
 
-    // … the other one the placeholder.
-    $this->actingAs($advisor)
+    // … the other one the read-only curriculum of the plan they were assigned.
+    $response = $this->actingAs($advisor)
         ->get(route('advisor.dashboard', ['student' => $other->id, 'tab' => 'plan']))
         ->assertOk()
         ->assertSee($other->name)
+        ->assertSee('has not built their own study plan yet')
+        ->assertSee('ADV2025-LOCAL')
+        ->assertSee('ADV 10103')
+        ->assertSee('ADV 10203')
+        ->assertSee('ADV 20203')
+        ->assertSee('ADV 30103')
+        ->assertSee('4 course(s) · 12 credits')
+        ->assertDontSee('This student has not built a study plan yet.');
+
+    // Read-only: the curriculum view carries no editable plan rows.
+    expect($response->getContent())->not->toContain('data-plan-entry');
+});
+
+test('a supervisee whose plan has no courses gets a clear notice', function () {
+    [$advisor] = makeAdvisorWithAdvisee();
+
+    $program = Program::create(['code' => 'EMP', 'name' => 'Empty Programme', 'duration_years' => 3]);
+    $empty = CoursePlan::create([
+        'program_id' => $program->id,
+        'code' => 'EMP2025-LOCAL',
+        'name' => 'Empty Plan',
+    ]);
+
+    $student = User::factory()->create([
+        'role' => 'student',
+        'program_id' => $program->id,
+        'plan_id' => $empty->id,
+        'advisor_id' => $advisor->staff_id,
+    ]);
+
+    $this->actingAs($advisor)
+        ->get(route('advisor.dashboard', ['student' => $student->id, 'tab' => 'plan']))
+        ->assertOk()
+        ->assertSee($student->name)
+        ->assertSee('EMP2025-LOCAL has no courses in its curriculum yet.');
+});
+
+test('a supervisee without a study plan falls back to the empty state', function () {
+    [$advisor] = makeAdvisorWithAdvisee();
+
+    $student = User::factory()->create([
+        'role' => 'student',
+        'plan_id' => null,
+        'advisor_id' => $advisor->staff_id,
+    ]);
+
+    $this->actingAs($advisor)
+        ->get(route('advisor.dashboard', ['student' => $student->id, 'tab' => 'plan']))
+        ->assertOk()
+        ->assertSee($student->name)
         ->assertSee('This student has not built a study plan yet.');
+});
+
+test('the supervisee list is grouped by the study plan assigned to each student', function () {
+    [$advisor, $student] = makeAdvisorWithAdvisee();
+
+    $otherProgram = Program::create(['code' => 'BEE', 'name' => 'Electrical Programme', 'duration_years' => 3]);
+    $otherPlan = CoursePlan::create([
+        'program_id' => $otherProgram->id,
+        'code' => 'BEE2025-LOCAL',
+        'name' => 'BEE Plan',
+    ]);
+
+    User::factory()->create([
+        'role' => 'student',
+        'program_id' => $otherProgram->id,
+        'plan_id' => $otherPlan->id,
+        'advisor_id' => $advisor->staff_id,
+    ]);
+
+    User::factory()->create([
+        'role' => 'student',
+        'plan_id' => null,
+        'advisor_id' => $advisor->staff_id,
+    ]);
+
+    $html = $this->actingAs($advisor)
+        ->get(route('advisor.dashboard'))
+        ->assertOk()
+        ->getContent();
+
+    // One section per plan, plans in code order, no-plan students last.
+    expect(substr_count($html, 'data-supervisee-group>'))->toBe(3);
+
+    $adv = strpos($html, 'ADV2025-LOCAL</p>');
+    $bee = strpos($html, 'BEE2025-LOCAL</p>');
+    $none = strpos($html, 'No study plan</p>');
+
+    expect($adv)->not->toBeFalse()
+        ->and($bee)->not->toBeFalse()
+        ->and($none)->not->toBeFalse()
+        ->and($adv)->toBeLessThan($bee)
+        ->and($bee)->toBeLessThan($none);
+
+    // The student on the plan the fixture built sits under its own heading.
+    expect($html)->toContain('ADV2025-LOCAL</p>')
+        ->and($html)->toContain('Advisor Plan');
 });
 
 test('a head of department sees only their own advisees, not the department', function () {

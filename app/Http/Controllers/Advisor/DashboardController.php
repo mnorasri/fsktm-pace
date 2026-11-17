@@ -8,13 +8,23 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Services\CurriculumService;
 use App\Services\StudyPlanService;
+use App\Support\StudyPlanRows;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
+    /**
+     * Curriculum grids keyed by plan id: advisees usually share a plan, so a
+     * page renders each plan once even when it holds many students.
+     *
+     * @var array<int, array<string, mixed>>
+     */
+    private array $curriculumCache = [];
+
     public function __construct(
         private readonly CurriculumService $curriculum,
         private readonly StudyPlanService $plans,
+        private readonly StudyPlanRows $planRows,
     ) {}
 
     public function index(): View
@@ -149,6 +159,9 @@ class DashboardController extends Controller
             'years' => $grid['years'],
             'semesters' => $grid['semesters'],
             'has_plan' => $student->studyPlanEntries->isNotEmpty(),
+            // When the student has not built their own plan yet, the advisor
+            // still reviews the curriculum their programme assigned to them.
+            'curriculum' => $student->studyPlanEntries->isEmpty() ? $this->curriculumFor($student) : null,
             'warnings' => $warnings,
             'registrations' => $student->preRegistrations,
             'term_registrations' => $termRequests,
@@ -164,10 +177,61 @@ class DashboardController extends Controller
     }
 
     /**
+     * The curriculum of the study plan assigned to a student, laid out year by
+     * year. Null when the student has no plan assigned.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function curriculumFor(User $student): ?array
+    {
+        $plan = $student->plan;
+
+        if (! $plan) {
+            return null;
+        }
+
+        if (! isset($this->curriculumCache[$plan->id])) {
+            $rows = $this->planRows->for($plan);
+            $placed = $rows->where('placed', true);
+
+            $this->curriculumCache[$plan->id] = [
+                'plan' => $plan,
+                'grid' => $this->planRows->grid(
+                    $rows,
+                    (float) ($plan->program?->duration_years ?? 4),
+                ),
+                'unplaced' => $rows->where('placed', false)->values(),
+                'courses' => $rows->count(),
+                'credits' => (int) $placed->sum('credits'),
+            ];
+        }
+
+        return $this->curriculumCache[$plan->id];
+    }
+
+    /**
+     * The supervisees split by the study plan assigned to them, so the list can
+     * show one section per plan. Students with no plan fall into a last group.
+     *
+     * @param  Collection<int, array<string, mixed>>  $students
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function groupByPlan($students)
+    {
+        return $students
+            ->groupBy(fn (array $row) => $row['student']->plan?->code ?? '~none')
+            ->sortKeys()
+            ->map(fn ($group, string $code) => [
+                'label' => $code === '~none' ? 'No study plan' : $code,
+                'name' => $group->first()['student']->plan?->name,
+                'students' => $group->values(),
+            ])
+            ->values();
+    }
+
+    /**
      * The variables shared by the full dashboard and the detail fragment.
      *
-     * @param  Collection  $students  Every advisee row (full page) or just the
-     *                                selected one (detail fragment)
      * @return array<string, mixed>
      */
     private function payload(
@@ -183,6 +247,7 @@ class DashboardController extends Controller
             'advisor' => $advisor,
             'summary' => $summary,
             'students' => $students,
+            'planGroups' => $this->groupByPlan($students),
             'selected' => $selected,
             'tab' => $tab,
             'semesterLabels' => StudyPlanService::SEMESTER_LABELS,

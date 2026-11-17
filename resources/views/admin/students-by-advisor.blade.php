@@ -6,7 +6,7 @@
     <x-page-header title="Students by PAK Advisor"
         subtitle="Browse each advisor's advisees, then set a student's programme and study plan from the same screen">
         <x-slot:actions>
-            <a href="{{ route('admin.students.index') }}" class="btn-ghost">
+            <a href="{{ route($studentRoutePrefix.'index') }}" class="btn-ghost">
                 <x-icon name="users" class="size-4" /> Student directory
             </a>
         </x-slot:actions>
@@ -31,13 +31,13 @@
             <div class="flex gap-2">
                 <button class="btn-primary">Search</button>
                 @if ($search !== '')
-                    <a href="{{ route('admin.students.by-advisor') }}" class="btn-ghost">Reset</a>
+                    <a href="{{ route($studentRoutePrefix.'by-advisor') }}" class="btn-ghost">Reset</a>
                 @endif
             </div>
         </form>
 
         @if ($unassigned > 0)
-            <a href="{{ route('admin.students.by-advisor', ['advisor' => 'none']) }}"
+            <a href="{{ route($studentRoutePrefix.'by-advisor', ['advisor' => 'none']) }}"
                 class="mb-4 flex flex-wrap items-center gap-3 rounded-3xl border border-amber-200 bg-amber-50 p-4 transition hover:border-amber-300 hover:bg-amber-100/70">
                 <span class="grid size-9 shrink-0 place-items-center rounded-2xl bg-amber-100 text-amber-600">
                     <x-icon name="warning" class="size-5" />
@@ -52,7 +52,7 @@
 
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             @forelse ($advisors as $advisor)
-                <a href="{{ route('admin.students.by-advisor', ['advisor' => $advisor->id, 'search' => $search !== '' ? $search : null]) }}"
+                <a href="{{ route($studentRoutePrefix.'by-advisor', ['advisor' => $advisor->id, 'search' => $search !== '' ? $search : null]) }}"
                     class="card flex items-center gap-3 p-4 transition hover:border-brand-300 hover:bg-brand-50/30">
                     <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-indigo-600 text-sm font-bold text-white">
                         {{ strtoupper(substr($advisor->name, 0, 1)) }}
@@ -80,7 +80,7 @@
     @else
         {{-- One advisor's students, with programme / plan editing --}}
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <a href="{{ route('admin.students.by-advisor', ['search' => $search !== '' ? $search : null]) }}"
+            <a href="{{ route($studentRoutePrefix.'by-advisor', ['search' => $search !== '' ? $search : null]) }}"
                 class="btn-ghost btn-sm">
                 <x-icon name="arrow-left" class="size-4" /> All advisors
             </a>
@@ -143,7 +143,7 @@
                                 </td>
                                 <td class="align-top">
                                     <form id="{{ $formId }}" method="POST"
-                                        action="{{ route('admin.students.placement', $student) }}" data-scroll-keep>
+                                        action="{{ route($studentRoutePrefix.'placement', $student) }}" data-scroll-keep>
                                         @csrf
                                         @method('PUT')
                                     </form>

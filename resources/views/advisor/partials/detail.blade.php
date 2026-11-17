@@ -222,7 +222,98 @@
                 </p>
             @endif
 
-            @if (! $row['has_plan'])
+            @if (! $row['has_plan'] && $row['curriculum'] && $row['curriculum']['courses'] > 0)
+                @php($curriculum = $row['curriculum'])
+                @php($curriculumHasSpecial = \in_array(3, $curriculum['grid']['semesters'], true))
+
+                {{-- No personal plan yet: show the curriculum the student was
+                     assigned, read-only, so the advisor can still review it. --}}
+                <div class="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-3.5 py-3 text-xs text-sky-800">
+                    <p>
+                        <span class="font-bold">{{ $student->name }}</span> has not built their own study plan yet.
+                        Showing the curriculum for <span class="font-semibold">{{ $curriculum['plan']->code }}</span>
+                        — {{ $curriculum['courses'] }} course(s) · {{ $curriculum['credits'] }} credits.
+                    </p>
+                    <p class="mt-1 text-[11px] text-sky-700/80">
+                        Read-only: the student chooses the terms when they build their own plan.
+                    </p>
+                </div>
+
+                <div class="mt-5 space-y-5">
+                    @foreach ($curriculum['grid']['years'] as $year => $terms)
+                        <section class="space-y-3">
+                            <div class="flex items-center gap-2.5">
+                                <span class="grid size-8 place-items-center rounded-xl bg-slate-900 text-[11px] font-bold text-white">Y{{ $year }}</span>
+                                <h4 class="text-sm font-bold text-slate-700">Year {{ $year }}</h4>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-4 {{ $curriculumHasSpecial ? 'lg:grid-cols-3' : 'lg:grid-cols-2' }}">
+                                @foreach ($curriculum['grid']['semesters'] as $semester)
+                                    @php($term = $terms[$semester])
+                                    <div class="min-w-0 rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+                                        <div class="flex flex-wrap items-center justify-between gap-2">
+                                            <p class="text-xs font-bold text-slate-600">{{ $semesterLabels[$semester] }}</p>
+                                            <span class="text-[11px] font-semibold text-slate-400">
+                                                {{ $term['rows']->count() }} course(s) · {{ $term['credits'] }} cr
+                                            </span>
+                                        </div>
+
+                                        @if ($term['rows']->isEmpty())
+                                            <p class="mt-3 rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-[11px] text-slate-400">
+                                                No courses in this term
+                                            </p>
+                                        @else
+                                            <ul class="mt-3 space-y-2">
+                                                @foreach ($term['rows'] as $row)
+                                                    <li class="flex flex-wrap items-start gap-2.5 rounded-xl border border-slate-200/70 bg-white p-3">
+                                                        <span class="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-slate-50 text-slate-400">
+                                                            <x-icon name="book" class="size-3.5" />
+                                                        </span>
+                                                        <div class="min-w-0 flex-1">
+                                                            <p class="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-slate-800">
+                                                                <span class="break-words">{{ $row['code'] }} · {{ $row['name'] }}</span>
+                                                                <x-badge :tone="match ($row['category']) {
+                                                                    'elective' => 'brand',
+                                                                    'university' => 'sky',
+                                                                    default => 'slate',
+                                                                }">{{ ucfirst($row['category']) }}</x-badge>
+                                                            </p>
+                                                            <p class="mt-0.5 text-[11px] text-slate-400">
+                                                                {{ $row['credits'] }} credits
+                                                                @if ($row['course']?->prerequisites)
+                                                                    · Prereq: {{ $row['course']->prerequisites }}
+                                                                @endif
+                                                            </p>
+                                                        </div>
+                                                    </li>
+                                                @endforeach
+                                            </ul>
+                                        @endif
+                                    </div>
+                                @endforeach
+                            </div>
+                        </section>
+                    @endforeach
+                </div>
+
+                @if ($curriculum['unplaced']->isNotEmpty())
+                    <div class="mt-4 rounded-2xl border border-dashed border-slate-200 p-3.5">
+                        <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Courses without a term</p>
+                        <ul class="mt-2 flex flex-wrap gap-1.5">
+                            @foreach ($curriculum['unplaced'] as $row)
+                                <li class="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">
+                                    {{ $row['code'] }}
+                                </li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+            @elseif (! $row['has_plan'] && $row['curriculum'])
+                <p class="mt-4 rounded-2xl border border-dashed border-amber-200 bg-amber-50 px-4 py-6 text-center text-xs text-amber-700">
+                    {{ $row['curriculum']['plan']->code }} has no courses in its curriculum yet.
+                    Ask the Head of Department to add them.
+                </p>
+            @elseif (! $row['has_plan'])
                 <p class="mt-4 rounded-2xl border border-dashed border-slate-200 px-4 py-8 text-center text-xs text-slate-400">
                     This student has not built a study plan yet.
                 </p>

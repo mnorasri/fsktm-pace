@@ -41,40 +41,59 @@
                 @endif
             </div>
 
-            <ul id="supervisee-list" class="max-h-[30rem] divide-y divide-slate-100 overflow-y-auto scroll-thin">
-                @foreach ($students as $row)
-                    @php($item = $row['student'])
-                    @php($isActive = $selected && $selected['student']->id === $item->id)
-                    <li data-supervisee-item data-search="{{ strtolower($item->name.' '.$item->student_id) }}">
-                        <a href="{{ route('advisor.dashboard', ['student' => $item->id]) }}#detail"
-                            data-student-id="{{ $item->id }}"
-                            data-swap-detail="{{ route('advisor.dashboard.detail', ['student' => $item->id, 'tab' => $tab]) }}"
-                            class="flex items-center gap-3 px-4 py-2.5 transition {{ $isActive ? 'bg-brand-50' : 'hover:bg-slate-50' }}">
-                            <span class="grid size-9 shrink-0 place-items-center rounded-full text-xs font-bold text-white
-                                    {{ $isActive ? 'bg-gradient-to-br from-brand-500 to-brand-700' : 'bg-gradient-to-br from-slate-600 to-slate-800' }}">
-                                {{ strtoupper(substr($item->name, 0, 1)) }}
-                            </span>
-
-                            <span class="min-w-0 flex-1">
-                                <span class="block truncate text-sm font-semibold {{ $isActive ? 'text-brand-700' : 'text-slate-700' }}">
-                                    {{ $item->name }}
-                                </span>
-                                <span class="block truncate text-[11px] text-slate-400">{{ $item->student_id }}</span>
-                            </span>
-
-                            <span class="flex shrink-0 items-center gap-1.5">
-                                @if ($row['submission']?->status === 'submitted')
-                                    <span class="size-2 rounded-full bg-amber-500" title="Registration awaiting approval"></span>
-                                @elseif ($item->plan_status === 'submitted')
-                                    <span class="size-2 rounded-full bg-sky-500" title="Study plan awaiting approval"></span>
+            <div id="supervisee-list" class="max-h-[30rem] overflow-y-auto scroll-thin">
+                @foreach ($planGroups as $group)
+                    <div data-supervisee-group>
+                        {{-- One section per study plan assigned to the supervisees. --}}
+                        <div class="sticky top-0 z-10 flex items-center justify-between gap-2 border-y border-slate-100 bg-slate-50/95 px-4 py-2 backdrop-blur">
+                            <div class="min-w-0">
+                                <p class="truncate font-mono text-[11px] font-bold tracking-wide text-slate-600">{{ $group['label'] }}</p>
+                                @if ($group['name'])
+                                    <p class="truncate text-[10px] text-slate-400">{{ $group['name'] }}</p>
                                 @endif
-                                <x-icon name="chevron-right"
-                                    class="size-4 {{ $isActive ? 'text-brand-500' : 'text-slate-300' }}" />
+                            </div>
+                            <span class="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500 ring-1 ring-slate-200">
+                                {{ $group['students']->count() }}
                             </span>
-                        </a>
-                    </li>
+                        </div>
+
+                        <ul class="divide-y divide-slate-100">
+                            @foreach ($group['students'] as $row)
+                                @php($item = $row['student'])
+                                @php($isActive = $selected && $selected['student']->id === $item->id)
+                                <li data-supervisee-item data-search="{{ strtolower($item->name.' '.$item->student_id) }}">
+                                    <a href="{{ route('advisor.dashboard', ['student' => $item->id]) }}#detail"
+                                        data-student-id="{{ $item->id }}"
+                                        data-swap-detail="{{ route('advisor.dashboard.detail', ['student' => $item->id, 'tab' => $tab]) }}"
+                                        class="flex items-center gap-3 px-4 py-2.5 transition {{ $isActive ? 'bg-brand-50' : 'hover:bg-slate-50' }}">
+                                        <span class="grid size-9 shrink-0 place-items-center rounded-full text-xs font-bold text-white
+                                                {{ $isActive ? 'bg-gradient-to-br from-brand-500 to-brand-700' : 'bg-gradient-to-br from-slate-600 to-slate-800' }}">
+                                            {{ strtoupper(substr($item->name, 0, 1)) }}
+                                        </span>
+
+                                        <span class="min-w-0 flex-1">
+                                            <span class="block truncate text-sm font-semibold {{ $isActive ? 'text-brand-700' : 'text-slate-700' }}">
+                                                {{ $item->name }}
+                                            </span>
+                                            <span class="block truncate text-[11px] text-slate-400">{{ $item->student_id }}</span>
+                                        </span>
+
+                                        <span class="flex shrink-0 items-center gap-1.5">
+                                            @if ($row['submission']?->status === 'submitted')
+                                                <span class="size-2 rounded-full bg-amber-500" title="Registration awaiting approval"></span>
+                                            @elseif ($item->plan_status === 'submitted')
+                                                <span class="size-2 rounded-full bg-sky-500" title="Study plan awaiting approval"></span>
+                                            @endif
+                                            <x-icon name="chevron-right"
+                                                class="size-4 {{ $isActive ? 'text-brand-500' : 'text-slate-300' }}" />
+                                        </span>
+                                    </a>
+                                </li>
+                            @endforeach
+                        </ul>
+                    </div>
                 @endforeach
-            </ul>
+            </div>
 
             <p id="supervisee-empty" class="hidden px-4 py-6 text-center text-xs text-slate-400">
                 No supervisee matches your search.
@@ -111,6 +130,8 @@
             const detail = document.getElementById('detail');
 
             if (search && items.length) {
+                const groups = document.querySelectorAll('#supervisee-list [data-supervisee-group]');
+
                 search.addEventListener('input', () => {
                     const term = search.value.trim().toLowerCase();
                     let visible = 0;
@@ -119,6 +140,13 @@
                         const match = !term || (item.dataset.search || '').includes(term);
                         item.classList.toggle('hidden', !match);
                         if (match) visible++;
+                    });
+
+                    // A plan heading disappears with its last hidden student.
+                    groups.forEach((group) => {
+                        const anyVisible = Array.from(group.querySelectorAll('[data-supervisee-item]'))
+                            .some((item) => !item.classList.contains('hidden'));
+                        group.classList.toggle('hidden', !anyVisible);
                     });
 
                     if (empty) empty.classList.toggle('hidden', visible > 0);

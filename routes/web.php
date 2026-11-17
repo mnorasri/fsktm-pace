@@ -152,6 +152,15 @@ Route::middleware(['auth', 'password.changed', 'role:advisor'])->prefix('advisor
 // Kept out of the advisor-only group: a Head of Department is an advisor, and
 // the administrator may open these pages as well (see EnsureHod).
 Route::middleware(['auth', 'password.changed', 'hod'])->prefix('advisor')->name('advisor.')->group(function () {
+    Route::get('/students', [StudentController::class, 'index'])->name('students.index');
+    Route::get('/students/by-advisor', [StudentController::class, 'byAdvisor'])->name('students.by-advisor');
+    Route::put('/students/{student}/placement', [StudentController::class, 'updatePlacement'])->name('students.placement');
+    Route::post('/students', [StudentController::class, 'store'])->name('students.store');
+    Route::post('/students/import', [StudentController::class, 'import'])->name('students.import');
+    Route::put('/students/{student}', [StudentController::class, 'update'])->name('students.update');
+    Route::delete('/students/{student}', [StudentController::class, 'destroy'])->name('students.destroy');
+    Route::post('/students/{student}/reset-password', [StudentController::class, 'resetPassword'])->name('students.reset-password');
+
     Route::get('/offering/manage', [HodOfferingController::class, 'manage'])->name('offering.manage');
     Route::get('/offering/grid', [HodOfferingController::class, 'grid'])->name('offering.grid');
     Route::get('/offering/workload', [HodOfferingController::class, 'workload'])->name('offering.workload');

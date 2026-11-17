@@ -5,7 +5,7 @@
 @section('content')
     <x-page-header title="Manage Students" subtitle="Student directory with programme, plan and PAK advisor mapping">
         <x-slot:actions>
-            <a href="{{ route('admin.students.by-advisor') }}" class="btn-ghost">
+            <a href="{{ route($studentRoutePrefix.'by-advisor') }}" class="btn-ghost">
                 <x-icon name="users" class="size-4" /> By PAK Advisor
             </a>
             <button type="button" data-modal-open="import-students" class="btn-ghost">
@@ -32,7 +32,7 @@
         </select>
         <div class="flex gap-2">
             <button class="btn-primary flex-1">Filter</button>
-            <a href="{{ route('admin.students.index') }}" class="btn-ghost">Reset</a>
+            <a href="{{ route($studentRoutePrefix.'index') }}" class="btn-ghost">Reset</a>
         </div>
     </form>
 
@@ -78,7 +78,7 @@
                                 <div class="flex flex-wrap items-center justify-end gap-1.5">
                                     <button type="button" class="btn-ghost btn-sm"
                                         data-edit="edit-student"
-                                        data-action="{{ route('admin.students.update', $student) }}"
+                                        data-action="{{ route($studentRoutePrefix.'update', $student) }}"
                                         data-title="Edit {{ $student->name }}"
                                         data-field-name="{{ $student->name }}"
                                         data-field-email="{{ $student->email }}"
@@ -90,11 +90,11 @@
                                         data-field-status="{{ $student->status }}">
                                         <x-icon name="cog" class="size-3.5" /> Edit
                                     </button>
-                                    <form method="POST" action="{{ route('admin.students.reset-password', $student) }}" data-confirm="Reset password for {{ $student->name }}?">
+                                    <form method="POST" action="{{ route($studentRoutePrefix.'reset-password', $student) }}" data-confirm="Reset password for {{ $student->name }}?">
                                         @csrf
                                         <button class="btn-subtle btn-sm"><x-icon name="lock" class="size-3.5" /> Reset</button>
                                     </form>
-                                    <form method="POST" action="{{ route('admin.students.destroy', $student) }}" data-confirm="Remove {{ $student->name }}?">
+                                    <form method="POST" action="{{ route($studentRoutePrefix.'destroy', $student) }}" data-confirm="Remove {{ $student->name }}?">
                                         @csrf
                                         @method('DELETE')
                                         <button class="btn-danger btn-sm"><x-icon name="x" class="size-3.5" /></button>
@@ -124,7 +124,7 @@
 
     {{-- Add --}}
     <x-modal id="add-student" title="New student" size="lg">
-        <form method="POST" action="{{ route('admin.students.store') }}">
+        <form method="POST" action="{{ route($studentRoutePrefix.'store') }}">
             @csrf
             {!! $studentForm() !!}
             <div class="mt-5 flex items-center justify-end gap-2">
@@ -150,7 +150,7 @@
     {{-- Import --}}
     <x-modal id="import-students" title="Bulk import students"
         subtitle="CSV columns: matric_num, student_name, student_email, program_code, plan_code, advisor_id, password — only matric_num is required">
-        <form method="POST" action="{{ route('admin.students.import') }}" enctype="multipart/form-data" class="space-y-4">
+        <form method="POST" action="{{ route($studentRoutePrefix.'import') }}" enctype="multipart/form-data" class="space-y-4">
             @csrf
             <input type="file" name="file" accept=".csv,text/csv" class="input" required>
             <div class="rounded-2xl bg-slate-50 p-3.5 text-xs text-slate-500">

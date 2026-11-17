@@ -46,6 +46,7 @@ class StudentController extends Controller
             ->withQueryString();
 
         return view('admin.students', [
+            'studentRoutePrefix' => $request->routeIs('advisor.students.*') ? 'advisor.students.' : 'admin.students.',
             'students' => $students,
             'programs' => Program::with('plans')->orderBy('code')->get(),
             'plans' => CoursePlan::orderBy('code')->get(),
@@ -102,6 +103,7 @@ class StudentController extends Controller
         }
 
         return view('admin.students-by-advisor', [
+            'studentRoutePrefix' => $request->routeIs('advisor.students.*') ? 'advisor.students.' : 'admin.students.',
             'advisors' => $advisors,
             'selectedAdvisor' => $selectedAdvisor,
             'showUnassigned' => $showUnassigned,

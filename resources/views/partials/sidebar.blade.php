@@ -55,6 +55,9 @@
         {{-- The Head of Department toolset is also open to the administrator. --}}
         @if ($user->isHod() || $user->isAdmin())
             <p class="nav-group-label">Head of Department</p>
+            @if ($user->isHod())
+                <x-nav-link :href="route('advisor.students.index')" icon="users" :active="request()->routeIs('advisor.students.*')">Manage Students</x-nav-link>
+            @endif
             <x-nav-link :href="route('advisor.offering.grid')" icon="layers" :active="request()->routeIs('advisor.offering.grid')">Course Offering</x-nav-link>
             <x-nav-link :href="route('advisor.offering.manage')" icon="clipboard" :active="request()->routeIs('advisor.offering.manage')">Manage Offering</x-nav-link>
             <x-nav-link :href="route('advisor.offering.workload')" icon="chart" :active="request()->routeIs('advisor.offering.workload')">Lecturer Workload</x-nav-link>
