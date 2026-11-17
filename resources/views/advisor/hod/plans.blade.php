@@ -67,7 +67,8 @@
                     data-field-year="1"
                     data-field-semester="1"
                     data-field-category="required"
-                    data-field-credits="">
+                    data-field-credits=""
+                    data-field-place_in_term="0">
                     <x-icon name="plus" class="size-3.5" /> Add course
                 </button>
             </x-slot:actions>
@@ -127,7 +128,9 @@
 
                         <div class="grid grid-cols-1 gap-4 {{ count($semesters) === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2' }}">
                             @foreach ($semesters as $semester)
-                                @php($term = $years[$year][$semester] ?? ['rows' => collect(), 'credits' => 0])
+                                @php
+                                    $term = $years[$year][$semester] ?? ['rows' => collect(), 'credits' => 0];
+                                @endphp
 
                                 <div class="rounded-2xl border border-slate-200 p-3.5">
                                     <div class="mb-3 flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
@@ -147,7 +150,8 @@
                                             data-field-year="{{ $year }}"
                                             data-field-semester="{{ $semester }}"
                                             data-field-category="required"
-                                            data-field-credits="">
+                                            data-field-credits=""
+                                            data-field-place_in_term="0">
                                             <x-icon name="plus" class="size-3.5" /> Add
                                         </button>
                                     </div>
@@ -185,30 +189,58 @@
 
                 <div class="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">
                     @foreach ($unplaced as $row)
+                        @php
+                            $termlessSlot = $row['plan_course'];
+                        @endphp
+
                         <div class="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-3.5">
                             <div class="min-w-0 flex-1">
                                 <p class="truncate text-sm font-semibold text-slate-800">{{ $row['code'] }}</p>
                                 <p class="truncate text-xs text-slate-400">{{ $row['name'] }}</p>
-                                <p class="mt-1 text-[11px] text-slate-400">{{ $row['credits'] }} cr · {{ $row['course']?->courseType?->name ?? 'Unset' }}</p>
+                                <div class="mt-1 flex flex-wrap items-center gap-1.5">
+                                    <span class="text-[11px] text-slate-400">{{ $row['credits'] }} cr · {{ $row['course']?->courseType?->name ?? 'Unset' }}</span>
+                                    <x-badge tone="brand">{{ ucfirst($row['category']) }}</x-badge>
+                                </div>
                             </div>
                             <div class="flex shrink-0 items-center gap-1">
-                                <button type="button" class="btn-ghost btn-sm" data-edit="add-plan-course"
-                                    data-title="Place {{ $row['code'] }} in the plan"
-                                    data-field-course_id="{{ $row['course']?->id }}"
-                                    data-field-year="1"
-                                    data-field-semester="1"
-                                    data-field-category="{{ $row['category'] }}"
-                                    data-field-credits="{{ $row['credits'] }}">
-                                    <x-icon name="calendar" class="size-3.5" /> Place
-                                </button>
-                                <form method="POST" action="{{ route('advisor.plans.attached.destroy', [$plan, $row['course']]) }}"
-                                    data-confirm="Remove {{ $row['code'] }} from {{ $plan->code }}? The course itself stays in the course directory.">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button class="btn-danger btn-sm" title="Remove from this plan">
-                                        <x-icon name="x" class="size-3.5" />
+                                @if ($termlessSlot)
+                                    <button type="button" class="btn-ghost btn-sm" data-edit="edit-plan-row"
+                                        data-action="{{ route('advisor.plans.courses.update', [$plan, $termlessSlot]) }}"
+                                        data-title="Place {{ $row['code'] }} in the plan"
+                                        data-field-year="1"
+                                        data-field-semester="1"
+                                        data-field-category="{{ $row['category'] }}"
+                                        data-field-credits="{{ $row['credits'] }}">
+                                        <x-icon name="calendar" class="size-3.5" /> Place
                                     </button>
-                                </form>
+                                    <form method="POST" action="{{ route('advisor.plans.courses.destroy', [$plan, $termlessSlot]) }}"
+                                        data-confirm="Remove {{ $row['code'] }} from the {{ $plan->code }} plan?">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button class="btn-danger btn-sm" title="Remove from this plan">
+                                            <x-icon name="x" class="size-3.5" />
+                                        </button>
+                                    </form>
+                                @else
+                                    <button type="button" class="btn-ghost btn-sm" data-edit="add-plan-course"
+                                        data-title="Place {{ $row['code'] }} in the plan"
+                                        data-field-course_id="{{ $row['course']?->id }}"
+                                        data-field-year="1"
+                                        data-field-semester="1"
+                                        data-field-category="{{ $row['category'] }}"
+                                        data-field-credits="{{ $row['credits'] }}"
+                                        data-field-place_in_term="1">
+                                        <x-icon name="calendar" class="size-3.5" /> Place
+                                    </button>
+                                    <form method="POST" action="{{ route('advisor.plans.attached.destroy', [$plan, $row['course']]) }}"
+                                        data-confirm="Remove {{ $row['code'] }} from {{ $plan->code }}? The course itself stays in the course directory.">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button class="btn-danger btn-sm" title="Remove from this plan">
+                                            <x-icon name="x" class="size-3.5" />
+                                        </button>
+                                    </form>
+                                @endif
                             </div>
                         </div>
                     @endforeach
@@ -295,8 +327,9 @@
         {{-- Add a course (also used to place a course that has no term yet) --}}
         <x-modal id="add-plan-course" title="Add course to {{ $plan->code }}" size="lg"
             subtitle="Pick a course from the course directory and give it a term">
-            <form method="POST" action="{{ route('advisor.plans.courses.store', $plan) }}">
+            <form method="POST" action="{{ route('advisor.plans.courses.store', $plan) }}" data-plan-course-form>
                 @csrf
+                <input type="hidden" name="place_in_term" value="0">
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <label class="block sm:col-span-2">
                         <span class="label">Course</span>
@@ -312,7 +345,7 @@
 
                     <label class="block">
                         <span class="label">Year</span>
-                        <select name="year" class="select" required>
+                        <select name="year" class="select" data-term-field required>
                             @foreach (range(1, 8) as $year)
                                 <option value="{{ $year }}">Year {{ $year }}</option>
                             @endforeach
@@ -320,7 +353,7 @@
                     </label>
                     <label class="block">
                         <span class="label">Semester</span>
-                        <select name="semester" class="select" required>
+                        <select name="semester" class="select" data-term-field required>
                             @foreach ($semesterLabels as $value => $label)
                                 <option value="{{ $value }}">{{ $label }}</option>
                             @endforeach
@@ -334,6 +367,10 @@
                             <option value="elective">Elective</option>
                             <option value="university">University</option>
                         </select>
+                        <p data-term-hint class="mt-1.5 hidden rounded-xl bg-brand-50 px-2.5 py-1.5 text-[11px] font-medium text-brand-700">
+                            Electives are added without a year or semester — they wait in
+                            <span class="font-semibold">Courses without a term</span>.
+                        </p>
                     </label>
                     <label class="block">
                         <span class="label">Credits (blank = course credits)</span>

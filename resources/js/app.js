@@ -186,6 +186,38 @@
         });
 
         /* ------------------------------------------------------------
+         * Study plan: electives carry no year or semester
+         * ---------------------------------------------------------- */
+        document.querySelectorAll('form[data-plan-course-form]').forEach((form) => {
+            const category = form.querySelector('[name="category"]');
+            const placeInTerm = form.querySelector('[name="place_in_term"]');
+            const termFields = form.querySelectorAll('[data-term-field]');
+            const hint = form.querySelector('[data-term-hint]');
+
+            const syncTermFields = () => {
+                // "Place" is an explicit request for a term; every other add is
+                // either an elective without one or a normal term placement.
+                const ignoreTerm = category?.value === 'elective' && placeInTerm?.value !== '1';
+
+                termFields.forEach((field) => {
+                    field.disabled = ignoreTerm;
+                    field.required = !ignoreTerm;
+                });
+
+                hint?.classList.toggle('hidden', !ignoreTerm);
+            };
+
+            category?.addEventListener('change', syncTermFields);
+            syncTermFields();
+
+            // The shared modal opener fills the form from data-* attributes
+            // after this listener runs, so re-check the fields afterwards.
+            document.querySelectorAll('[data-edit="add-plan-course"]').forEach((trigger) => {
+                trigger.addEventListener('click', () => setTimeout(syncTermFields, 0));
+            });
+        });
+
+        /* ------------------------------------------------------------
          * Selective "replace elective" modal
          * ---------------------------------------------------------- */
         document.querySelectorAll('[data-replace-entry]').forEach((trigger) => {

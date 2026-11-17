@@ -7,6 +7,7 @@ use App\Models\OfferingGroup;
 use App\Models\OfferingSection;
 use App\Models\PreRegistration;
 use App\Models\Program;
+use App\Models\RegistrationSubmission;
 use App\Models\Setting;
 use App\Models\User;
 use App\Support\RegistrationSchedule;
@@ -300,4 +301,155 @@ test('manage offering is read-only after the administrator cutoff', function () 
         ->assertSessionHasErrors('offering');
 
     expect(OfferingSection::where('offering_id', $offering->id)->count())->toBe(0);
+});
+
+test('the registration approvals panel lists a submitted pre-registration', function () {
+    [$hod, $offering, $norasri] = makeOfferingWithPakGroups();
+    $hod->update(['staff_id' => 'HOD001']);
+
+    $student = User::factory()->create([
+        'role' => 'student', 'program_id' => $offering->course->program_id,
+        'plan_id' => $offering->course->course_plan_id,
+        'advisor_id' => $hod->staff_id,
+    ]);
+
+    RegistrationSubmission::create([
+        'user_id' => $student->id, 'session' => '2025/2026', 'semester' => '1',
+        'status' => 'submitted', 'submitted_at' => now(),
+    ]);
+
+    PreRegistration::create([
+        'user_id' => $student->id, 'offering_id' => $offering->id,
+        'session' => '2025/2026', 'semester' => '1', 'credits' => 3, 'status' => 'pending',
+    ]);
+
+    $this->actingAs($hod)
+        ->get(route('advisor.offering.manage'))
+        ->assertOk()
+        ->assertSee('Registration Approvals')
+        ->assertSee($student->name)
+        ->assertSee($student->student_id)
+        ->assertSee('PAK 10103')
+        ->assertSee('3')
+        ->assertSee('Approve registration')
+        ->assertSee('Return');
+});
+
+test('the registration approvals panel is empty when nothing is pending', function () {
+    [$hod] = makeOfferingWithPakGroups();
+
+    $this->actingAs($hod)
+        ->get(route('advisor.offering.manage'))
+        ->assertOk()
+        ->assertSee('Registration Approvals')
+        ->assertSee('No student pre-registrations are awaiting your decision for this term.');
+});
+
+test('an administrator can approve a student registration from the panel', function () {
+    [$hod, $offering] = makeOfferingWithPakGroups();
+    $hod->update(['staff_id' => 'HOD001']);
+
+    $advisor = User::factory()->create(['role' => 'advisor', 'staff_id' => 'LECT001']);
+
+    $student = User::factory()->create([
+        'role' => 'student', 'program_id' => $offering->course->program_id,
+        'plan_id' => $offering->course->course_plan_id,
+        'advisor_id' => $advisor->staff_id,
+    ]);
+
+    $submission = RegistrationSubmission::create([
+        'user_id' => $student->id, 'session' => '2025/2026', 'semester' => '1',
+        'status' => 'submitted', 'submitted_at' => now(),
+    ]);
+
+    $registration = PreRegistration::create([
+        'user_id' => $student->id, 'offering_id' => $offering->id,
+        'session' => '2025/2026', 'semester' => '1', 'credits' => 3, 'status' => 'pending',
+    ]);
+
+    $this->actingAs($advisor)
+        ->post(route('advisor.registrations.batch.approve', $student))
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    expect($registration->refresh()->status)->toBe('approved')
+        ->and($submission->refresh()->status)->toBe('approved');
+});
+
+test('an administrator can return a student registration from the panel', function () {
+    [$hod, $offering] = makeOfferingWithPakGroups();
+    $hod->update(['staff_id' => 'HOD002']);
+
+    $advisor = User::factory()->create(['role' => 'advisor', 'staff_id' => 'LECT002']);
+
+    $student = User::factory()->create([
+        'role' => 'student', 'program_id' => $offering->course->program_id,
+        'plan_id' => $offering->course->course_plan_id,
+        'advisor_id' => $advisor->staff_id,
+    ]);
+
+    $submission = RegistrationSubmission::create([
+        'user_id' => $student->id, 'session' => '2025/2026', 'semester' => '1',
+        'status' => 'submitted', 'submitted_at' => now(),
+    ]);
+
+    PreRegistration::create([
+        'user_id' => $student->id, 'offering_id' => $offering->id,
+        'session' => '2025/2026', 'semester' => '1', 'credits' => 3, 'status' => 'pending',
+    ]);
+
+    $this->actingAs($advisor)
+        ->post(route('advisor.registrations.batch.return', $student), [
+            'note' => 'Please revise your course selection.',
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    expect($submission->refresh()->status)->toBe('returned')
+        ->and($submission->fresh()->note)->toBe('Please revise your course selection.');
+});
+
+test('a head of department sees only their own advisees in the approvals panel', function () {
+    $hod = User::factory()->create([
+        'role' => 'advisor', 'is_hod' => true, 'staff_id' => 'HOD001',
+    ]);
+    $otherAdvisor = User::factory()->create([
+        'role' => 'advisor', 'staff_id' => 'LECT001',
+    ]);
+
+    Setting::put('active_session', '2025/2026');
+    Setting::put('active_semester', '1');
+
+    $program = Program::create(['code' => 'PAK', 'name' => 'PAK Programme', 'duration_years' => 3]);
+    $plan = CoursePlan::create([
+        'program_id' => $program->id, 'code' => 'PAK2025-LOCAL', 'name' => 'PAK Plan',
+    ]);
+    $course = Course::create([
+        'code' => 'PAK 10103', 'name' => 'Offered Course', 'credits' => 3,
+        'semester' => 1, 'course_plan_id' => $plan->id,
+    ]);
+    $offering = Offering::create([
+        'course_id' => $course->id, 'session' => '2025/2026', 'semester' => '1',
+        'section' => '01', 'capacity' => 40, 'is_offered' => true,
+    ]);
+
+    foreach ([[$hod, true], [$otherAdvisor, false]] as [$advisor, $isOwn]) {
+        $student = User::factory()->create([
+            'role' => 'student', 'program_id' => $program->id,
+            'plan_id' => $plan->id, 'advisor_id' => $advisor->staff_id,
+        ]);
+        RegistrationSubmission::create([
+            'user_id' => $student->id, 'session' => '2025/2026', 'semester' => '1',
+            'status' => 'submitted', 'submitted_at' => now(),
+        ]);
+        PreRegistration::create([
+            'user_id' => $student->id, 'offering_id' => $offering->id,
+            'session' => '2025/2026', 'semester' => '1', 'credits' => 3, 'status' => 'pending',
+        ]);
+    }
+
+    $this->actingAs($hod)
+        ->get(route('advisor.offering.manage'))
+        ->assertOk()
+        ->assertSee('Registration Approvals');
 });

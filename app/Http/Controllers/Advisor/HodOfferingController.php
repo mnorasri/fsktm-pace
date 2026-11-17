@@ -11,6 +11,7 @@ use App\Models\OfferingGroup;
 use App\Models\OfferingSection;
 use App\Models\PreRegistration;
 use App\Models\Program;
+use App\Models\RegistrationSubmission;
 use App\Models\Setting;
 use App\Models\User;
 use App\Support\RegistrationSchedule;
@@ -155,6 +156,35 @@ class HodOfferingController extends Controller
             ->sortByDesc('students')
             ->values();
 
+        // Students whose pre-registration for the active term is awaiting the
+        // advisor's decision. An advisor sees only their own advisees; an
+        // administrator sees every submitted registration.
+        $advisor = auth()->user();
+        $pendingQuery = RegistrationSubmission::query()
+            ->where('session', $session)
+            ->where('semester', $semester)
+            ->where('status', RegistrationSubmission::STATUS_SUBMITTED)
+            ->with(['student' => fn ($q) => $q->with(['program', 'department'])])
+            ->orderBy('submitted_at', 'asc');
+
+        if (! $advisor->isAdmin()) {
+            $pendingQuery->whereHas('student', fn ($q) => $q->where('advisor_id', $advisor->staff_id));
+        }
+
+        $pendingRegistrations = $pendingQuery->get()->map(fn (RegistrationSubmission $submission) => [
+            'submission' => $submission,
+            'student' => $submission->student,
+            'termRequests' => $submission->student->preRegistrations()
+                ->where('session', $session)
+                ->where('semester', $semester)
+                ->where('status', 'pending')
+                ->with('offering.course')
+                ->get(),
+        ])->map(fn (array $row): array => $row + [
+            'termCredits' => $row['termRequests']->sum('credits'),
+            'termCourses' => $row['termRequests']->count(),
+        ]);
+
         return view('advisor.hod.manage', [
             'groups' => $groups,
             'groupOptions' => $groupOptions,
@@ -164,6 +194,7 @@ class HodOfferingController extends Controller
             'groupPanels' => $groupPanels,
             'assignedLecturers' => $assignedLecturers,
             'totalsByAdvisor' => $totalsByAdvisor,
+            'pendingRegistrations' => $pendingRegistrations,
             'offeringSections' => OfferingSection::whereIn('offering_id', $offerings->pluck('id'))
                 ->orderBy('section')
                 ->get()

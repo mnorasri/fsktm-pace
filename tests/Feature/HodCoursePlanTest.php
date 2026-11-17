@@ -220,6 +220,72 @@ test('a head of department can add an existing course to a plan', function () {
     expect($plan->planCourses()->where('course_id', $course->id)->count())->toBe(1);
 });
 
+test('a course added as an elective ignores the chosen year and semester', function () {
+    [$hod, , , $plan] = makeHodWithPlan();
+    $course = makePlanCourse('BIK 29803');
+
+    $this->actingAs($hod)
+        ->post(route('advisor.plans.courses.store', $plan), [
+            'course_id' => $course->id,
+            'year' => 3,
+            'semester' => 2,
+            'category' => 'elective',
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    $row = $plan->planCourses()->where('course_id', $course->id)->first();
+
+    expect($row)->not->toBeNull()
+        ->and($row->category)->toBe('elective')
+        ->and($row->year)->toBeNull()
+        ->and($row->semester)->toBeNull();
+
+    $this->actingAs($hod)
+        ->get(route('advisor.plans.index', ['plan_id' => $plan->id]))
+        ->assertOk()
+        ->assertSee('Courses without a term')
+        ->assertSee('BIK 29803');
+});
+
+test('an elective can still be given a term when it is placed explicitly', function () {
+    [$hod, , , $plan] = makeHodWithPlan();
+    $course = makePlanCourse('BIK 29813');
+
+    $this->actingAs($hod)
+        ->post(route('advisor.plans.courses.store', $plan), [
+            'course_id' => $course->id,
+            'year' => 2,
+            'semester' => 1,
+            'category' => 'elective',
+            'place_in_term' => 1,
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    $this->assertDatabaseHas('plan_courses', [
+        'course_plan_id' => $plan->id,
+        'course_id' => $course->id,
+        'year' => 2,
+        'semester' => 1,
+        'category' => 'elective',
+    ]);
+});
+
+test('a required course still needs a year and semester', function () {
+    [$hod, , , $plan] = makeHodWithPlan();
+    $course = makePlanCourse('BIK 29823');
+
+    $this->actingAs($hod)
+        ->post(route('advisor.plans.courses.store', $plan), [
+            'course_id' => $course->id,
+            'category' => 'required',
+        ])
+        ->assertSessionHasErrors(['year', 'semester']);
+
+    expect($plan->planCourses()->where('course_id', $course->id)->exists())->toBeFalse();
+});
+
 test('a placed course can be moved to another term and removed', function () {
     [$hod, , , $plan] = makeHodWithPlan();
     $course = makePlanCourse('BIK 10303');

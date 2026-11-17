@@ -238,11 +238,22 @@ class StudyPlanService
         }
 
         $candidates = [];
+        $slotted = [];
 
         // Slots explicitly defined on the study plan: real courses and the
         // elective placeholders the student replaces later.
         foreach ($plan->planCourses()->with('course')->orderBy('year')->orderBy('semester')->get() as $planCourse) {
             if (! $planCourse->course_id && ! $planCourse->placeholder_key) {
+                continue;
+            }
+
+            if ($planCourse->course_id) {
+                $slotted[] = $planCourse->course_id;
+            }
+
+            // A row without a term (an elective waiting to be placed) is not
+            // part of the timetable the student works through.
+            if ($planCourse->year === null || $planCourse->semester === null) {
                 continue;
             }
 
@@ -257,7 +268,7 @@ class StudyPlanService
 
         // The plan's own courses, placed by their curriculum semester: odd
         // semesters sit in Semester 1 of the year, even ones in Semester 2.
-        $slotted = array_filter(array_map(fn (array $row) => $row['course']?->id, $candidates));
+        $slotted = array_values(array_unique($slotted));
 
         foreach ($plan->courses()->with('courseType')->orderBy('semester')->orderBy('course_code')->get() as $course) {
             if (in_array($course->id, $slotted, true)) {

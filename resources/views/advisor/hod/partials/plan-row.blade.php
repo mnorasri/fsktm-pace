@@ -51,7 +51,8 @@
                 data-field-year="{{ $row['year'] }}"
                 data-field-semester="{{ $row['semester'] }}"
                 data-field-category="{{ $row['category'] }}"
-                data-field-credits="{{ $row['credits'] }}">
+                data-field-credits="{{ $row['credits'] }}"
+                data-field-place_in_term="1">
                 <x-icon name="calendar" class="size-3.5" /> Place
             </button>
             <form method="POST" action="{{ route('advisor.plans.attached.destroy', [$plan, $row['course']]) }}"

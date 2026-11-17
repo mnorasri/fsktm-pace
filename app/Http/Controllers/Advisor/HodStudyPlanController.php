@@ -69,7 +69,7 @@ class HodStudyPlanController extends Controller
             'totals' => [
                 'courses' => $rows->count(),
                 'credits' => $placed->sum('credits'),
-                'pinned' => $rows->where('slotted', true)->count(),
+                'pinned' => $rows->where('slotted', true)->where('placed', true)->count(),
             ],
         ]);
     }
@@ -98,12 +98,31 @@ class HodStudyPlanController extends Controller
     /**
      * Put an existing course on the plan, or pin an attached course to the
      * term chosen here.
+     *
+     * A course added as an elective carries no term: its year and semester are
+     * ignored and the row waits in "Courses without a term" until someone
+     * places it explicitly (or the student picks it for an elective slot).
      */
     public function addCourse(Request $request, CoursePlan $plan): RedirectResponse
     {
-        $data = $this->validatedRow($request);
+        $request->validate(['course_id' => ['required', 'exists:courses,id']]);
 
-        $course = Course::findOrFail($data['course_id']);
+        $course = Course::findOrFail($request->integer('course_id'));
+
+        $category = $request->filled('category')
+            ? $request->string('category')->value()
+            : $this->defaultCategory($course);
+
+        // "Place" is an explicit request for a term, so it keeps its year and
+        // semester even when the row is an elective.
+        $ignoreTerm = $category === 'elective' && ! $request->boolean('place_in_term');
+
+        $data = $request->validate([
+            'year' => [$ignoreTerm ? 'nullable' : 'required', 'integer', 'min:1', 'max:8'],
+            'semester' => [$ignoreTerm ? 'nullable' : 'required', 'integer', 'in:1,2,3'],
+            'category' => ['nullable', 'in:required,elective,university'],
+            'credits' => ['nullable', 'integer', 'min:0', 'max:20'],
+        ]);
 
         $already = $plan->planCourses()->where('course_id', $course->id)->exists();
 
@@ -113,15 +132,22 @@ class HodStudyPlanController extends Controller
             ]);
         }
 
+        $year = $ignoreTerm ? null : (int) $data['year'];
+        $semester = $ignoreTerm ? null : (int) $data['semester'];
+
         $plan->planCourses()->create([
             'course_id' => $course->id,
-            'year' => $data['year'],
-            'semester' => $data['semester'],
-            'category' => $data['category'] ?? $this->defaultCategory($course),
+            'year' => $year,
+            'semester' => $semester,
+            'category' => $category,
             'credits' => $data['credits'] ?? $course->credits,
         ]);
 
-        return back()->with('status', $course->code.' placed in '.$plan->code.' — Year '.$data['year'].' '.$this->semesterLabel($data['semester']).'.');
+        if ($ignoreTerm) {
+            return back()->with('status', $course->code.' added to '.$plan->code.' as an elective — no year or semester needed.');
+        }
+
+        return back()->with('status', $course->code.' placed in '.$plan->code.' — Year '.$year.' '.$this->semesterLabel($semester).'.');
     }
 
     /**
@@ -287,18 +313,22 @@ class HodStudyPlanController extends Controller
         $rows = collect();
 
         foreach ($slots as $slot) {
+            // A row can be on the plan without a term — electives are added
+            // that way, for example — and it waits in "Courses without a term".
+            $placed = $slot->year !== null && $slot->semester !== null;
+
             $rows->push([
                 'key' => 'slot-'.$slot->id,
                 'plan_course' => $slot,
                 'course' => $slot->course,
                 'code' => $slot->course?->code ?? $this->placeholderLabel($slot),
                 'name' => $slot->course?->name ?? 'Elective option — the student picks the course',
-                'year' => max(1, (int) $slot->year),
-                'semester' => max(1, min(3, (int) $slot->semester)),
+                'year' => $placed ? max(1, (int) $slot->year) : null,
+                'semester' => $placed ? max(1, min(3, (int) $slot->semester)) : null,
                 'category' => $slot->category ?: 'required',
                 'credits' => (int) ($slot->credits ?? $slot->course?->credits ?? 0),
                 'slotted' => true,
-                'placed' => true,
+                'placed' => $placed,
             ]);
         }
 
@@ -364,20 +394,6 @@ class HodStudyPlanController extends Controller
         }
 
         return ['years' => $years, 'semesters' => $semesters, 'maxYear' => $maxYear];
-    }
-
-    /**
-     * @return array{year: int, semester: int, category: string|null, credits: int|null, course_id: mixed}
-     */
-    private function validatedRow(Request $request): array
-    {
-        return $request->validate([
-            'course_id' => ['required', 'exists:courses,id'],
-            'year' => ['required', 'integer', 'min:1', 'max:8'],
-            'semester' => ['required', 'integer', 'in:1,2,3'],
-            'category' => ['nullable', 'in:required,elective,university'],
-            'credits' => ['nullable', 'integer', 'min:0', 'max:20'],
-        ]);
     }
 
     /**

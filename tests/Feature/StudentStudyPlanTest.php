@@ -3,6 +3,7 @@
 use App\Models\Course;
 use App\Models\CoursePlan;
 use App\Models\CourseType;
+use App\Models\PlanCourse;
 use App\Models\Program;
 use App\Models\StudyPlanEntry;
 use App\Models\User;
@@ -92,6 +93,31 @@ test('the plan is seeded from the curriculum and empty rows are cleared', functi
         ->toBe(['year' => 1, 'semester' => 1])
         ->and($entries->firstWhere('course_id', $courses[1]->id)->only(['year', 'semester']))
         ->toBe(['year' => 1, 'semester' => 2]);
+});
+
+test('a plan row without a term is not seeded into the student timetable', function () {
+    [$student, $plan] = makeStudentWithCurriculum();
+
+    // An elective the Head of Department added without a year or semester.
+    $elective = Course::create([
+        'code' => 'TST 29903', 'name' => 'Waiting Elective', 'credits' => 3,
+        'semester' => 99, 'course_plan_id' => $plan->id,
+    ]);
+
+    PlanCourse::create([
+        'course_plan_id' => $plan->id,
+        'course_id' => $elective->id,
+        'year' => null,
+        'semester' => null,
+        'category' => 'elective',
+        'credits' => 3,
+    ]);
+
+    $this->actingAs($student)
+        ->get(route('student.study-plan'))
+        ->assertOk();
+
+    expect(StudyPlanEntry::where('user_id', $student->id)->where('course_id', $elective->id)->exists())->toBeFalse();
 });
 
 test('placeholder rows from the plan are kept as elective slots', function () {

@@ -81,6 +81,111 @@
         <x-stat-card label="Course Prefix Groups" :value="$groups->count()" icon="layers" tone="sky" />
     </div>
 
+    {{-- ---------------------------------------------------------------
+         | Registration approvals — approve or return a submitted
+         | pre-registration for the active term.
+         --------------------------------------------------------------- --}}
+    <x-card class="mt-4" title="Registration Approvals"
+        subtitle="Pre-registrations awaiting your decision for {{ $activeSession }} · Semester {{ $activeSemester }}">
+        <x-slot:actions>
+            <x-badge tone="amber">{{ $pendingRegistrations->count() }} awaiting decision</x-badge>
+        </x-slot:actions>
+
+        @if ($pendingRegistrations->isEmpty())
+            <p class="py-10 text-center text-sm text-slate-400">
+                No student pre-registrations are awaiting your decision for this term.
+            </p>
+        @else
+            @foreach ($pendingRegistrations as $row)
+                @php $student = $row['student']; @endphp
+                @php $submission = $row['submission']; @endphp
+                @php $termRequests = $row['termRequests']; @endphp
+
+                <div class="mb-5 rounded-xl border border-slate-200 bg-white p-4">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                        <div>
+                            <p class="text-sm font-semibold text-slate-800">{{ $student->name }}</p>
+                            <p class="text-[11px] text-slate-400">
+                                {{ $student->student_id }}
+                                @if ($student->program) · {{ $student->program->code }} @endif
+                                @if ($student->advisor) · PAK: {{ $student->advisor->name }} @endif
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <x-badge tone="amber">Submitted</x-badge>
+                            <span class="text-[10px] text-slate-400">
+                                {{ $submission->submitted_at?->format('d M Y H:i') }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="-mx-6 overflow-x-auto mb-3">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Course Code</th>
+                                    <th>Course Name</th>
+                                    <th class="text-center">Section</th>
+                                    <th class="text-center">Credits</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse ($termRequests as $registration)
+                                    @php $course = $registration->offering?->course; @endphp
+                                    <tr class="border-b border-slate-50 last:border-b-0">
+                                        <td class="align-top! font-mono text-xs font-semibold text-slate-700">
+                                            {{ $course?->code }}
+                                        </td>
+                                        <td class="align-top! text-xs text-slate-600">{{ $course?->name }}</td>
+                                        <td class="align-top! text-center text-[10px] text-slate-400">
+                                            {{ $registration->section ?? '—' }}
+                                        </td>
+                                        <td class="align-top! text-center text-xs font-semibold text-slate-700">
+                                            {{ $registration->credits }}
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="4" class="py-4 text-center text-sm text-slate-400">
+                                            No pending course requests.
+                                        </td>
+                                    </tr>
+                                @endforelse
+                                <tr class="bg-slate-50 font-semibold border-t border-slate-100">
+                                    <td colspan="3" class="px-3.5 py-2 text-right text-slate-500">Total credits</td>
+                                    <td class="px-3.5 py-2 text-center text-slate-800">{{ $row['termCredits'] }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                        <form method="POST" action="{{ route('advisor.registrations.batch.approve', $student) }}" data-scroll-keep>
+                            @csrf
+                            <button class="btn-success btn-sm">
+                                <x-icon name="check" class="size-3.5" /> Approve registration
+                            </button>
+                        </form>
+                        <form method="POST" action="{{ route('advisor.registrations.batch.return', $student) }}"
+                            class="flex min-w-[16rem] flex-1 items-center gap-2" data-scroll-keep>
+                            @csrf
+                            <input type="text" name="note" placeholder="Reason (optional)" class="input flex-1">
+                            <button class="btn-ghost btn-sm">
+                                <x-icon name="arrow-path" class="size-3.5" /> Return
+                            </button>
+                        </form>
+                    </div>
+
+                    <p class="mt-2.5 text-[10px] text-slate-400">
+                        Approving confirms every pending course request above at once. Returning sends the
+                        whole registration back to {{ $student->name }} for revision.
+                    </p>
+                </div>
+
+            @endforeach
+        @endif
+    </x-card>
+
     {{-- Every PAK group (academic advisor) and the students they registered
          for the active term, across all the courses offered. --}}
     @if ($totalsByAdvisor->isNotEmpty())
