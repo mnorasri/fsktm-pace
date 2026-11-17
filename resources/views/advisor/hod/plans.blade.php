@@ -185,7 +185,7 @@
              example the elective catalogue, whose semester is 99). --}}
         @if ($unplaced->isNotEmpty())
             <x-card pad class="mt-5" title="Courses without a term"
-                subtitle="Attached to this plan, but not placed in a year or semester yet">
+                subtitle="No fixed year or semester — electives can be offered in any term">
                 <x-slot:actions>
                     <x-badge tone="amber">{{ $unplaced->count() }}</x-badge>
                 </x-slot:actions>
@@ -303,7 +303,7 @@
     @if ($plan)
         {{-- Bulk import courses for this plan --}}
         <x-modal id="import-plan-courses" title="Import courses into {{ $plan->code }}"
-            subtitle="CSV columns: course_code, year, semester — each row adds or updates the course's placement on this plan">
+            subtitle="CSV columns: course_code, year, semester — leave both term fields blank for electives available in any term">
         <form method="POST" action="{{ route('advisor.plans.courses.import', $plan) }}" enctype="multipart/form-data" class="space-y-4">
             @csrf
             <label class="block">
@@ -317,7 +317,14 @@
                     <li><span class="font-semibold">course_code</span> must already exist in the course directory (matched case-insensitively).</li>
                     <li><span class="font-semibold">year</span> is the study year, 1–8.</li>
                     <li><span class="font-semibold">semester</span> is 1 (odd), 2 (even) or 3 (special).</li>
+                    <li>Leave <span class="font-semibold">both year and semester blank</span> (or provide only course_code) to import an elective with no fixed term. If either term field is supplied, both are required.</li>
                 </ul>
+                <p class="mt-2 font-semibold text-slate-600">Example: fixed-term course and flexible electives</p>
+                <pre class="mt-1 font-mono">course_code,year,semester
+BIK 10103,1,1
+BIK 29803,,
+BIK 29903</pre>
+                <p class="mt-2">Flexible electives appear under “Courses without a term” and can be offered in any year or semester. You may also upload a file with only the course_code column.</p>
                 <p class="mt-2">Existing rows are updated; new rows are added to this plan only. A row that fails is skipped and reported in the summary.</p>
             </div>
             <div class="flex items-center justify-end gap-2">

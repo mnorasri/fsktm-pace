@@ -164,7 +164,8 @@ class HodStudyPlanController extends Controller
     /**
      * Bulk-import the current study plan's courses from a CSV with the columns
      * course_code, year, semester. Rows are upserted per plan so one course can
-     * be part of several study plans.
+     * be part of several study plans. Omitting both term fields imports an
+     * elective that can be offered in any year and semester.
      */
     public function importCourses(Request $request, CoursePlan $plan): RedirectResponse
     {
@@ -215,22 +216,23 @@ class HodStudyPlanController extends Controller
 
         $year = $this->csvValue($row, 'year', 1);
         $semester = $this->csvValue($row, 'semester', 2);
+        $withoutTerm = blank($year) && blank($semester);
 
-        if (blank($year) || ! ctype_digit($year) || (int) $year < 1 || (int) $year > 8) {
+        if (! $withoutTerm && (blank($year) || ! ctype_digit($year) || (int) $year < 1 || (int) $year > 8)) {
             throw new RuntimeException('year must be a whole number between 1 and 8');
         }
 
-        if (blank($semester) || ! ctype_digit($semester) || ! in_array((int) $semester, [1, 2, 3], true)) {
+        if (! $withoutTerm && (blank($semester) || ! ctype_digit($semester) || ! in_array((int) $semester, [1, 2, 3], true))) {
             throw new RuntimeException('semester must be 1, 2 or 3');
         }
 
-        return DB::transaction(function () use ($plan, $course, $year, $semester) {
+        return DB::transaction(function () use ($plan, $course, $year, $semester, $withoutTerm) {
             $row = $plan->planCourses()->where('course_id', $course->id)->first();
 
             $attributes = [
-                'year' => (int) $year,
-                'semester' => (int) $semester,
-                'category' => $this->defaultCategory($course),
+                'year' => $withoutTerm ? null : (int) $year,
+                'semester' => $withoutTerm ? null : (int) $semester,
+                'category' => $withoutTerm ? 'elective' : $this->defaultCategory($course),
                 'credits' => $course->credit_hours,
             ];
 

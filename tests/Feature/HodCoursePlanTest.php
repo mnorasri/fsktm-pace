@@ -488,6 +488,93 @@ test('a plan course import skips rows with an unknown course or a bad term', fun
     expect($plan->planCourses()->count())->toBe(1);
 });
 
+test('a plan CSV can mix fixed terms and flexible electives', function () {
+    [$hod, , , $plan] = makeHodWithPlan();
+    $fixed = makePlanCourse('BIK 10103');
+    $blank = makePlanCourse('BIK 29803');
+    $omitted = makePlanCourse('BIK 29903');
+    $csv = "course_code,year,semester\nBIK 10103,1,1\nBIK 29803,,\nBIK 29903\n";
+
+    $this->actingAs($hod)->post(route('advisor.plans.courses.import', $plan), [
+        'file' => UploadedFile::fake()->createWithContent('courses.csv', $csv),
+    ])->assertRedirect()->assertSessionHasNoErrors()
+        ->assertSessionHas('import_report.created', 3)
+        ->assertSessionHas('import_report.failed', 0);
+
+    $this->assertDatabaseHas('plan_courses', [
+        'course_plan_id' => $plan->id, 'course_id' => $fixed->id,
+        'year' => 1, 'semester' => 1, 'category' => 'required',
+    ]);
+
+    foreach ([$blank, $omitted] as $course) {
+        $this->assertDatabaseHas('plan_courses', [
+            'course_plan_id' => $plan->id, 'course_id' => $course->id,
+            'year' => null, 'semester' => null, 'category' => 'elective', 'credits' => 3,
+        ]);
+    }
+
+    $this->get(route('advisor.plans.index', ['plan_id' => $plan->id]))
+        ->assertOk()
+        ->assertViewHas('unplaced', fn ($rows) => $rows->pluck('course.id')->all() === [$blank->id, $omitted->id])
+        ->assertSee('Courses without a term')
+        ->assertSee('BIK 29803')
+        ->assertSee('BIK 29903');
+});
+
+test('a course code only CSV updates the selected plan without changing other plans or the directory', function () {
+    [$hod, , $program, $plan] = makeHodWithPlan();
+    $other = CoursePlan::create([
+        'program_id' => $program->id, 'code' => 'BIK-OTHER', 'name' => 'Other Plan',
+    ]);
+    $course = makePlanCourse('BIK 10103', 2, $other->id);
+
+    foreach ([$plan, $other] as $target) {
+        $target->planCourses()->create([
+            'course_id' => $course->id, 'year' => 2, 'semester' => 2,
+            'category' => 'required', 'credits' => 3,
+        ]);
+    }
+
+    $this->actingAs($hod)->post(route('advisor.plans.courses.import', $plan), [
+        'file' => UploadedFile::fake()->createWithContent('courses.csv', "course_code\nBIK 10103\n"),
+    ])->assertRedirect()->assertSessionHasNoErrors()
+        ->assertSessionHas('import_report.created', 0)
+        ->assertSessionHas('import_report.updated', 1)
+        ->assertSessionHas('import_report.failed', 0);
+
+    $this->assertDatabaseHas('plan_courses', [
+        'course_plan_id' => $plan->id, 'course_id' => $course->id,
+        'year' => null, 'semester' => null, 'category' => 'elective',
+    ]);
+    $this->assertDatabaseHas('plan_courses', [
+        'course_plan_id' => $other->id, 'course_id' => $course->id,
+        'year' => 2, 'semester' => 2, 'category' => 'required',
+    ]);
+    $this->assertDatabaseHas('courses', [
+        'id' => $course->id, 'semester' => 2, 'course_plan_id' => $other->id,
+    ]);
+    $this->assertDatabaseCount('plan_courses', 2);
+});
+
+test('a plan import rejects partial or invalid terms rather than treating them as flexible electives', function (string $term, string $error) {
+    [$hod, , , $plan] = makeHodWithPlan();
+    $course = makePlanCourse('BIK 10103');
+
+    $this->actingAs($hod)->post(route('advisor.plans.courses.import', $plan), [
+        'file' => UploadedFile::fake()->createWithContent('courses.csv', "course_code,year,semester\nBIK 10103,{$term}\n"),
+    ])->assertRedirect()->assertSessionHas('import_report.failed', 1)
+        ->assertSessionHas('import_report.failures', ['Line 2: '.$error]);
+
+    $this->assertDatabaseMissing('plan_courses', [
+        'course_plan_id' => $plan->id, 'course_id' => $course->id,
+    ]);
+})->with([
+    'only year' => ['2,', 'semester must be 1, 2 or 3'],
+    'only semester' => [',1', 'year must be a whole number between 1 and 8'],
+    'invalid year' => ['abc,', 'year must be a whole number between 1 and 8'],
+    'invalid semester' => [',abc', 'year must be a whole number between 1 and 8'],
+]);
+
 test('a plan course import moves a course already on the plan instead of duplicating it', function () {
     [$hod, , , $plan] = makeHodWithPlan();
     $course = makePlanCourse('BIK 10103');
