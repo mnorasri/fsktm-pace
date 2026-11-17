@@ -347,23 +347,6 @@
                     </label>
 
                     <label class="block">
-                        <span class="label">Year</span>
-                        <select name="year" class="select" data-term-field required>
-                            @foreach (range(1, 8) as $year)
-                                <option value="{{ $year }}">Year {{ $year }}</option>
-                            @endforeach
-                        </select>
-                    </label>
-                    <label class="block">
-                        <span class="label">Semester</span>
-                        <select name="semester" class="select" data-term-field required>
-                            @foreach ($semesterLabels as $value => $label)
-                                <option value="{{ $value }}">{{ $label }}</option>
-                            @endforeach
-                        </select>
-                    </label>
-
-                    <label class="block">
                         <span class="label">Category</span>
                         <select name="category" class="select">
                             <option value="required">Required</option>
@@ -378,6 +361,23 @@
                     <label class="block">
                         <span class="label">Credits (blank = course credits)</span>
                         <input type="number" name="credits" class="input" min="0" max="20" placeholder="3">
+                    </label>
+
+                    <label class="block">
+                        <span class="label">Year</span>
+                        <select name="year" class="select" data-term-field required>
+                            @foreach (range(1, 8) as $year)
+                                <option value="{{ $year }}">Year {{ $year }}</option>
+                            @endforeach
+                        </select>
+                    </label>
+                    <label class="block">
+                        <span class="label">Semester</span>
+                        <select name="semester" class="select" data-term-field required>
+                            @foreach ($semesterLabels as $value => $label)
+                                <option value="{{ $value }}">{{ $label }}</option>
+                            @endforeach
+                        </select>
                     </label>
                 </div>
 
