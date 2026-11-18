@@ -50,11 +50,13 @@
         @if ($user->isAdvisor())
             <p class="nav-group-label">Advising</p>
             <x-nav-link :href="route('advisor.dashboard')" icon="users" :active="request()->routeIs('advisor.dashboard')">My Supervisees</x-nav-link>
+            <x-nav-link :href="route('advisor.course-requests.index')" icon="clipboard" :active="request()->routeIs('advisor.course-requests.index')">Course Requests</x-nav-link>
         @endif
 
         {{-- The Head of Department toolset is also open to the administrator. --}}
         @if ($user->isHod() || $user->isAdmin())
             <p class="nav-group-label">Head of Department</p>
+            <x-nav-link :href="route('advisor.course-requests.hod.index')" icon="check" :active="request()->routeIs('advisor.course-requests.hod.*')">Course Request Approvals</x-nav-link>
             @if ($user->isHod())
                 <x-nav-link :href="route('advisor.students.index')" icon="users" :active="request()->routeIs('advisor.students.*')">Manage Students</x-nav-link>
             @endif
@@ -76,6 +78,7 @@
             <x-nav-link :href="route('student.dashboard')" icon="home" :active="request()->routeIs('student.dashboard')">Dashboard</x-nav-link>
             <x-nav-link :href="route('student.study-plan')" icon="calendar" :active="request()->routeIs('student.study-plan')">Study Plan</x-nav-link>
             <x-nav-link :href="route('student.pre-registration')" icon="book" :active="request()->routeIs('student.pre-registration')">Pre-Registration</x-nav-link>
+            <x-nav-link :href="route('student.course-requests.index')" icon="clipboard" :active="request()->routeIs('student.course-requests.*')">Request a Course</x-nav-link>
             <x-nav-link :href="route('student.slip')" icon="printer" :active="request()->routeIs('student.slip')">Registration Slip</x-nav-link>
         @endif
 

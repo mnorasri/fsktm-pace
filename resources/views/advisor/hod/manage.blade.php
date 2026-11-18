@@ -6,6 +6,9 @@
     <x-page-header title="Manage Offering"
         subtitle="Registered students per course, split by PAK group · give each PAK group its section and lecturer, then a coordinator for the course">
         <x-slot:actions>
+            <a href="{{ route('advisor.course-requests.hod.index') }}" class="btn-ghost no-print">
+                <x-icon name="check" class="size-4" /> Course Request Approvals
+            </a>
             <x-badge tone="brand" dot>{{ $activeSession }} · Semester {{ $activeSemester }}</x-badge>
             <a href="{{ route('advisor.offering.export') }}" class="btn-ghost no-print">
                 <x-icon name="download" class="size-4" /> Export CSV
@@ -27,7 +30,8 @@
                 </p>
                 <p class="mt-0.5 text-sm text-amber-800">
                     Sections, lecturers and coordinators are read-only now. Only an administrator can
-                    change offerings after the cutoff.
+                    change offerings directly after the cutoff. The Head of Department may still approve
+                    advisor-forwarded course requests before the student-registration deadline.
                 </p>
             </div>
             <x-badge tone="amber" dot>Closed</x-badge>

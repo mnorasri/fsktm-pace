@@ -6,6 +6,9 @@
     <x-page-header title="Course Pre-Registration"
         subtitle="{{ $activeSession }} · Semester {{ $activeSemester }} — your study plan, with only the courses offered this term enabled">
         <x-slot:actions>
+            <a href="{{ route('student.course-requests.index') }}" class="btn-ghost">
+                <x-icon name="plus" class="size-4" /> Request an unoffered course
+            </a>
             <x-badge tone="{{ $committedCredits >= $cap ? 'rose' : 'brand' }}" dot>
                 {{ $committedCredits }} / {{ $cap }} credits
             </x-badge>
@@ -102,7 +105,7 @@
     @endif
 
     <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <x-stat-card label="Committed" :value="$committedCredits" icon="check" tone="brand" hint="Pending + approved" />
+        <x-stat-card label="Committed" :value="$committedCredits" icon="check" tone="brand" hint="Registrations + course requests" />
         <x-stat-card label="Remaining" :value="$remainingCredits" icon="chart" tone="emerald" hint="Before the {{ $cap }}-credit cap" />
         <x-stat-card label="Credit Cap" :value="$cap" icon="lock" tone="rose" hint="Hard limit per term" />
         <x-stat-card label="Offered Courses" :value="$offeredCount" icon="book" tone="sky" hint="{{ $offeredInPlan }} from your plan" />
@@ -225,6 +228,9 @@
                                                     </button>
                                                 @else
                                                     <span class="badge-slate">Not offered</span>
+                                                    @if ($course && ! \in_array($entry->status, ['COMPLETED', 'EXEMPTED'], true))
+                                                        <a href="{{ route('student.course-requests.index', ['course_id' => $course->id]) }}" class="btn-ghost btn-sm">Request course</a>
+                                                    @endif
                                                 @endif
                                             </div>
                                         </li>

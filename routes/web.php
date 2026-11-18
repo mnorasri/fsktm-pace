@@ -13,6 +13,7 @@ use App\Http\Controllers\Advisor\HodOfferingController;
 use App\Http\Controllers\Advisor\HodStudyPlanController;
 use App\Http\Controllers\Auth\ForcePasswordController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\CourseOfferingRequestController;
 use App\Http\Controllers\Curriculum\CourseController as CurriculumCourseController;
 use App\Http\Controllers\Curriculum\ProgrammeController;
 use App\Http\Controllers\Curriculum\StudyPlanController as CurriculumStudyPlanController;
@@ -131,6 +132,8 @@ Route::middleware(['auth', 'password.changed', 'curriculum'])->prefix('curriculu
 // Advisor / PAK portal
 // -------------------------------------------------------------------
 Route::middleware(['auth', 'password.changed', 'role:advisor'])->prefix('advisor')->name('advisor.')->group(function () {
+    Route::get('/course-requests', [CourseOfferingRequestController::class, 'advisorIndex'])->name('course-requests.index');
+    Route::post('/course-requests/{courseRequest}/review', [CourseOfferingRequestController::class, 'advisorReview'])->name('course-requests.review');
     Route::get('/', [AdvisorDashboardController::class, 'index'])->name('dashboard');
     // The detail panel for one supervisee, returned as a fragment so the
     // dashboard can swap it in without reloading the page.
@@ -152,6 +155,8 @@ Route::middleware(['auth', 'password.changed', 'role:advisor'])->prefix('advisor
 // Kept out of the advisor-only group: a Head of Department is an advisor, and
 // the administrator may open these pages as well (see EnsureHod).
 Route::middleware(['auth', 'password.changed', 'hod'])->prefix('advisor')->name('advisor.')->group(function () {
+    Route::get('/course-requests/approval', [CourseOfferingRequestController::class, 'hodIndex'])->name('course-requests.hod.index');
+    Route::post('/course-requests/{courseRequest}/approval', [CourseOfferingRequestController::class, 'hodReview'])->name('course-requests.hod.review');
     Route::get('/students', [StudentController::class, 'index'])->name('students.index');
     Route::get('/students/by-advisor', [StudentController::class, 'byAdvisor'])->name('students.by-advisor');
     Route::put('/students/{student}/placement', [StudentController::class, 'updatePlacement'])->name('students.placement');
@@ -203,6 +208,8 @@ Route::middleware(['auth', 'password.changed', 'hod'])->prefix('advisor')->name(
 // Student portal
 // -------------------------------------------------------------------
 Route::middleware(['auth', 'password.changed', 'role:student'])->prefix('student')->name('student.')->group(function () {
+    Route::get('/course-requests', [CourseOfferingRequestController::class, 'studentIndex'])->name('course-requests.index');
+    Route::post('/course-requests', [CourseOfferingRequestController::class, 'store'])->name('course-requests.store');
     Route::get('/', [StudentDashboardController::class, 'index'])->name('dashboard');
 
     Route::get('/study-plan', [StudyPlanController::class, 'index'])->name('study-plan');

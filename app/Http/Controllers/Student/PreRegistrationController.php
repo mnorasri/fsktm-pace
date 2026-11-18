@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
+use App\Models\CourseOfferingRequest;
 use App\Models\Offering;
 use App\Models\PreRegistration;
 use App\Models\RegistrationSubmission;
@@ -12,6 +13,7 @@ use App\Services\CurriculumService;
 use App\Services\StudyPlanService;
 use App\Support\RegistrationSchedule;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class PreRegistrationController extends Controller
@@ -63,7 +65,11 @@ class PreRegistrationController extends Controller
         $entries = $this->plans->entriesFor($student);
         $grid = $this->plans->grid($student, $entries);
 
-        $committed = $this->curriculum->committedCredits($student, $session, $semester);
+        $committed = $this->curriculum->totalCommittedCredits($student, $session, $semester);
+        $requestedCourseIds = CourseOfferingRequest::where('user_id', $student->id)
+            ->where('session', $session)->where('semester', $semester)
+            ->whereIn('status', [CourseOfferingRequest::PENDING_ADVISOR, CourseOfferingRequest::PENDING_HOD, CourseOfferingRequest::APPROVED])
+            ->pluck('course_id')->flip();
         $cap = CurriculumService::MAX_CREDITS_PER_TERM;
 
         $rows = [];
@@ -97,7 +103,7 @@ class PreRegistrationController extends Controller
 
                     if (! $eligible) {
                         $reason = 'Locked — complete prerequisite(s): '.implode(', ', $prereq['missing']).'.';
-                    } elseif ($committed + $course->credits > $cap) {
+                    } elseif ($committed - ($requestedCourseIds->has($course->id) ? $course->credits : 0) + $course->credits > $cap) {
                         $capBlocked = true;
                         $reason = 'Credit cap reached — remove a course before adding '.$course->code.'.';
                     }
@@ -141,69 +147,71 @@ class PreRegistrationController extends Controller
 
     public function store(Offering $offering): RedirectResponse
     {
-        /** @var User $student */
-        $student = auth()->user();
+        return DB::transaction(function () use ($offering) {
+            /** @var User $student */
+            $student = User::whereKey(auth()->id())->lockForUpdate()->firstOrFail();
 
-        [$session, $semester] = $this->activeTerm();
+            [$session, $semester] = $this->activeTerm();
 
-        if ($reason = RegistrationSchedule::studentClosedReason()) {
-            return back()->withErrors(['offering' => $reason]);
-        }
+            if ($reason = RegistrationSchedule::studentClosedReason()) {
+                return back()->withErrors(['offering' => $reason]);
+            }
 
-        $submission = RegistrationSubmission::forTerm($student, $session, $semester);
+            $submission = RegistrationSubmission::forTerm($student, $session, $semester);
 
-        if ($submission?->isLocked()) {
-            return back()->withErrors([
-                'offering' => $submission->status === RegistrationSubmission::STATUS_APPROVED
-                    ? 'Your pre-registration has been approved by your advisor and is now locked.'
-                    : 'Your pre-registration is with your advisor for approval. You cannot change it until they respond.',
-            ]);
-        }
+            if ($submission?->isLocked()) {
+                return back()->withErrors([
+                    'offering' => $submission->status === RegistrationSubmission::STATUS_APPROVED
+                        ? 'Your pre-registration has been approved by your advisor and is now locked.'
+                        : 'Your pre-registration is with your advisor for approval. You cannot change it until they respond.',
+                ]);
+            }
 
-        if ($offering->session !== $session || $offering->semester !== $semester || ! $offering->is_offered) {
-            return back()->withErrors(['offering' => 'That course is not offered in the active term.']);
-        }
+            if ($offering->session !== $session || $offering->semester !== $semester || ! $offering->is_offered) {
+                return back()->withErrors(['offering' => 'That course is not offered in the active term.']);
+            }
 
-        $existing = $student->preRegistrations()
-            ->where('offering_id', $offering->id)
-            ->first();
+            $existing = $student->preRegistrations()
+                ->where('offering_id', $offering->id)
+                ->first();
 
-        if ($existing && in_array($existing->status, ['pending', 'approved'], true)) {
-            return back()->withErrors(['offering' => 'You have already pre-registered for '.$offering->course->code.'.']);
-        }
+            if ($existing && in_array($existing->status, ['pending', 'approved'], true)) {
+                return back()->withErrors(['offering' => 'You have already pre-registered for '.$offering->course->code.'.']);
+            }
 
-        $prereq = $this->curriculum->prerequisitesSatisfied($student, $offering->course);
+            $prereq = $this->curriculum->prerequisitesSatisfied($student, $offering->course);
 
-        if (! $prereq['ok']) {
-            return back()->withErrors([
-                'offering' => $offering->course->code.' is locked. Complete the prerequisite(s): '.implode(', ', $prereq['missing']).'.',
-            ]);
-        }
+            if (! $prereq['ok']) {
+                return back()->withErrors([
+                    'offering' => $offering->course->code.' is locked. Complete the prerequisite(s): '.implode(', ', $prereq['missing']).'.',
+                ]);
+            }
 
-        $committed = $this->curriculum->committedCredits($student, $session, $semester);
+            $committed = $this->curriculum->totalCommittedCredits($student, $session, $semester, $offering->course_id);
 
-        if ($committed + $offering->course->credits > CurriculumService::MAX_CREDITS_PER_TERM) {
-            $remaining = max(0, CurriculumService::MAX_CREDITS_PER_TERM - $committed);
+            if ($committed + $offering->course->credits > CurriculumService::MAX_CREDITS_PER_TERM) {
+                $remaining = max(0, CurriculumService::MAX_CREDITS_PER_TERM - $committed);
 
-            return back()->withErrors([
-                'offering' => 'Credit cap reached. You may only add '.$remaining.' more credit(s) this term (maximum '.CurriculumService::MAX_CREDITS_PER_TERM.').',
-            ]);
-        }
+                return back()->withErrors([
+                    'offering' => 'Credit cap reached. You may only add '.$remaining.' more credit(s) this term (maximum '.CurriculumService::MAX_CREDITS_PER_TERM.').',
+                ]);
+            }
 
-        // Idempotent: re-requesting a previously rejected course resets it to pending.
-        PreRegistration::updateOrCreate(
-            ['user_id' => $student->id, 'offering_id' => $offering->id],
-            [
-                'session' => $session,
-                'semester' => $semester,
-                'credits' => $offering->course->credits,
-                'status' => 'pending',
-                'reviewed_by' => null,
-                'reviewed_at' => null,
-            ],
-        );
+            // Idempotent: re-requesting a previously rejected course resets it to pending.
+            PreRegistration::updateOrCreate(
+                ['user_id' => $student->id, 'offering_id' => $offering->id],
+                [
+                    'session' => $session,
+                    'semester' => $semester,
+                    'credits' => $offering->course->credits,
+                    'status' => 'pending',
+                    'reviewed_by' => null,
+                    'reviewed_at' => null,
+                ],
+            );
 
-        return back()->with('status', $offering->course->code.' added to your pre-registration (pending approval).');
+            return back()->with('status', $offering->course->code.' added to your pre-registration (pending approval).');
+        });
     }
 
     public function destroy(PreRegistration $registration): RedirectResponse

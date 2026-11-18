@@ -3,8 +3,10 @@
 namespace App\Services;
 
 use App\Models\Course;
+use App\Models\CourseOfferingRequest;
 use App\Models\StudyPlanEntry;
 use App\Models\User;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 
 class CurriculumService
@@ -130,5 +132,34 @@ class CurriculumService
             ->where('semester', $semester)
             ->whereIn('status', ['pending', 'approved'])
             ->sum('credits');
+    }
+
+    /**
+     * Registrations plus outstanding requests, counting each course once.
+     * A request stops reserving extra credits when its registration exists.
+     */
+    public function totalCommittedCredits(User $student, string $session, string $semester, ?int $excludeRequestedCourseId = null): int
+    {
+        $requested = CourseOfferingRequest::query()
+            ->join('courses', 'courses.id', '=', 'course_offering_requests.course_id')
+            ->where('course_offering_requests.user_id', $student->id)
+            ->where('course_offering_requests.session', $session)
+            ->where('course_offering_requests.semester', $semester)
+            ->whereIn('course_offering_requests.status', [
+                CourseOfferingRequest::PENDING_ADVISOR, CourseOfferingRequest::PENDING_HOD, CourseOfferingRequest::APPROVED,
+            ])
+            ->when($excludeRequestedCourseId !== null, fn ($query) => $query->where('courses.id', '!=', $excludeRequestedCourseId))
+            ->whereNotExists(function (Builder $query) {
+                $query->selectRaw('1')->from('pre_registrations')
+                    ->join('offerings', 'offerings.id', '=', 'pre_registrations.offering_id')
+                    ->whereColumn('pre_registrations.user_id', 'course_offering_requests.user_id')
+                    ->whereColumn('offerings.course_id', 'course_offering_requests.course_id')
+                    ->whereColumn('pre_registrations.session', 'course_offering_requests.session')
+                    ->whereColumn('pre_registrations.semester', 'course_offering_requests.semester')
+                    ->whereIn('pre_registrations.status', ['pending', 'approved']);
+            })
+            ->sum('courses.credit_hours');
+
+        return $this->committedCredits($student, $session, $semester) + (int) $requested;
     }
 }

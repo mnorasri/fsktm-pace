@@ -6,6 +6,9 @@
     <x-page-header title="My Supervisees"
         subtitle="Pick a supervisee to review their pre-registration and study plan">
         <x-slot:actions>
+            <a href="{{ route('advisor.course-requests.index') }}" class="btn-ghost">
+                <x-icon name="clipboard" class="size-4" /> Course Requests
+            </a>
             <x-badge tone="brand" dot>{{ $activeSession }} · Semester {{ $activeSemester }}</x-badge>
         </x-slot:actions>
     </x-page-header>
