@@ -59,10 +59,10 @@
                     @if ($submission)
                         <x-badge :tone="match ($submission->status) {
                             'approved' => 'emerald',
-                            'returned' => 'rose',
+                            'returned', 'rejected' => 'rose',
                             default => 'amber',
                         }" dot>
-                            {{ $submission->status === 'submitted' ? 'Awaiting your approval' : ucfirst($submission->status) }}
+                            {{ match ($submission->status) { 'submitted' => 'Awaiting your approval', 'returned', 'rejected' => 'Rejected — revision required', default => ucfirst($submission->status) } }}
                             @if ($submission->submitted_at) · submitted {{ $submission->submitted_at->format('d M Y') }} @endif
                         </x-badge>
                     @else
@@ -81,7 +81,7 @@
                             <th class="border-b border-slate-200 px-3 py-2 text-center">Section</th>
                             <th class="border-b border-slate-200 px-3 py-2 text-center">Credits</th>
                             <th class="border-b border-slate-200 px-3 py-2 text-center">Status</th>
-                            <th class="border-b border-slate-200 px-3 py-2 text-center">Action</th>
+                            <th class="border-b border-slate-200 px-3 py-2 text-center">Approval</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -89,7 +89,13 @@
                             <tr class="border-b border-slate-100 last:border-b-0">
                                 <td class="px-3 py-2 text-slate-400">{{ $loop->iteration }}</td>
                                 <td class="px-3 py-2 font-mono font-semibold text-slate-700">{{ $registration->offering->course->code }}</td>
-                                <td class="px-3 py-2 text-slate-600">{{ $registration->offering->course->name }}</td>
+                                <td class="px-3 py-2 text-slate-600">
+                                    {{ $registration->offering->course->name }}
+                                    <x-prerequisite-indicator :prerequisites="$row['registration_prerequisites'][$registration->id]" />
+                                    @if ($registration->status === 'rejected' && $registration->note)
+                                        <p class="mt-2 text-xs text-rose-700"><span class="font-semibold">Reason for rejection:</span> {{ $registration->note }}</p>
+                                    @endif
+                                </td>
                                 <td class="px-3 py-2 text-center text-slate-500">{{ $registration->offering->section }}</td>
                                 <td class="px-3 py-2 text-center font-semibold text-slate-700">{{ $registration->credits }}</td>
                                 <td class="px-3 py-2 text-center">
@@ -107,13 +113,6 @@
                                                 <button class="rounded-lg p-1.5 text-emerald-500 transition hover:bg-emerald-50 hover:text-emerald-700"
                                                     title="Approve {{ $registration->offering->course->code }}">
                                                     <x-icon name="check" class="size-4" />
-                                                </button>
-                                            </form>
-                                            <form method="POST" action="{{ route('advisor.registrations.reject', $registration) }}">
-                                                @csrf
-                                                <button class="rounded-lg p-1.5 text-rose-500 transition hover:bg-rose-50 hover:text-rose-700"
-                                                    title="Reject {{ $registration->offering->course->code }}">
-                                                    <x-icon name="x" class="size-4" />
                                                 </button>
                                             </form>
                                         </div>
@@ -144,25 +143,10 @@
             </p>
 
             @if ($submitted)
-                <div class="mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3.5">
-                    <p class="w-full text-xs font-bold text-amber-800">
-                        Approve the whole registration ({{ $row['registration_totals']['courses'] }} course(s) confirmed at once),
-                        or return it to {{ $student->name }} for revision.
-                    </p>
-                    <form method="POST" action="{{ route('advisor.registrations.batch.approve', $student) }}" data-scroll-keep>
-                        @csrf
-                        <button class="btn-success btn-sm"><x-icon name="check" class="size-3.5" /> Approve registration</button>
-                    </form>
-                    <form method="POST" action="{{ route('advisor.registrations.batch.return', $student) }}"
-                        class="flex min-w-[15rem] flex-1 items-center gap-2" data-scroll-keep>
-                        @csrf
-                        <input type="text" name="note" placeholder="Reason (optional)" class="input flex-1">
-                        <button class="btn-ghost btn-sm"><x-icon name="arrow-path" class="size-3.5" /> Return</button>
-                    </form>
-                </div>
+                <x-registration-decision :student="$student" :courses="$row['registration_totals']['courses']" :credits="$termCredits" />
             @elseif ($submission?->note)
                 <p class="mt-3 rounded-2xl bg-slate-50 px-3.5 py-3 text-xs text-slate-500">
-                    <span class="font-semibold">Your note:</span> {{ $submission->note }}
+                    <span class="font-semibold">{{ in_array($submission->status, ['returned', 'rejected'], true) ? 'Reason for rejection:' : 'Your note:' }}</span> {{ $submission->note }}
                 </p>
             @endif
 
@@ -213,7 +197,7 @@
                     </form>
                     <form method="POST" action="{{ route('advisor.plans.reject', $student) }}">
                         @csrf
-                        <button class="btn-danger btn-sm"><x-icon name="x" class="size-3.5" /> Return</button>
+                        <button class="btn-danger btn-sm"><x-icon name="x" class="size-3.5" /> Return study plan</button>
                     </form>
                 </div>
             @elseif ($student->plan_review_note)

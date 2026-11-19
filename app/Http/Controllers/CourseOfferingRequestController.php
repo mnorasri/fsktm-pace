@@ -158,7 +158,7 @@ class CourseOfferingRequestController extends Controller
     private function listing(Request $request, string $mode): View
     {
         [$session, $semester] = $this->activeTerm();
-        $query = CourseOfferingRequest::with(['course', 'student.program', 'student.advisor', 'advisorReviewer', 'hodReviewer']);
+        $query = CourseOfferingRequest::with(['course', 'student.program', 'student.advisor', 'student.studyPlanEntries.course', 'advisorReviewer', 'hodReviewer']);
 
         if ($mode === 'student') {
             $query->where('user_id', $request->user()->id);
@@ -192,6 +192,9 @@ class CourseOfferingRequestController extends Controller
 
         return view('course-requests.index', [
             'requests' => $records,
+            'requestPrerequisites' => $records->getCollection()->mapWithKeys(fn (CourseOfferingRequest $record) => [
+                $record->id => $this->curriculum->prerequisiteStanding($record->student, $record->course),
+            ]),
             'registeredRequestIds' => $registeredRequestIds,
             'courses' => $courses,
             'mode' => $mode,

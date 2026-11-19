@@ -9,6 +9,7 @@ use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ApprovalController extends Controller
 {
@@ -51,19 +52,6 @@ class ApprovalController extends Controller
         return back()->with('status', 'Pre-registration approved for '.$registration->student->name.'.');
     }
 
-    public function rejectRegistration(PreRegistration $registration): RedirectResponse
-    {
-        $this->authorizeAdvisee($registration->student);
-
-        $registration->update([
-            'status' => 'rejected',
-            'reviewed_by' => auth()->id(),
-            'reviewed_at' => now(),
-        ]);
-
-        return back()->with('status', 'Pre-registration rejected for '.$registration->student->name.'.');
-    }
-
     /**
      * Approve the student's whole pre-registration for the active term: the
      * batch is signed off and every course request in it is confirmed.
@@ -102,29 +90,45 @@ class ApprovalController extends Controller
     }
 
     /**
-     * Return the batch to the student so they can adjust it and submit again.
+     * Reject the submission with feedback so the student can revise it.
      */
-    public function returnRegistrationBatch(Request $request, User $student): RedirectResponse
+    public function rejectRegistrationBatch(Request $request, User $student): RedirectResponse
     {
         $this->authorizeAdvisee($student);
 
+        $data = $request->validate([
+            'note' => ['required', 'string', 'max:2000'],
+        ], ['note.required' => 'Please provide a reason for rejecting the registration.']);
+
         [$session, $semester] = $this->activeTerm();
-        $submission = RegistrationSubmission::forTerm($student, $session, $semester);
 
-        if (! $submission || $submission->status !== RegistrationSubmission::STATUS_SUBMITTED) {
-            return back()->withErrors([
-                'registration' => 'There is no pre-registration awaiting your approval for '.$student->name.'.',
+        return DB::transaction(function () use ($student, $session, $semester, $data) {
+            $submission = RegistrationSubmission::where('user_id', $student->id)
+                ->where('session', $session)->where('semester', $semester)->lockForUpdate()->first();
+
+            if (! $submission || $submission->status !== RegistrationSubmission::STATUS_SUBMITTED) {
+                return back()->withErrors([
+                    'registration' => 'There is no pre-registration awaiting your approval for '.$student->name.'.',
+                ]);
+            }
+
+            $submission->update([
+                'status' => RegistrationSubmission::STATUS_REJECTED,
+                'reviewed_by' => auth()->id(),
+                'reviewed_at' => now(),
+                'note' => $data['note'],
             ]);
-        }
 
-        $submission->update([
-            'status' => RegistrationSubmission::STATUS_RETURNED,
-            'reviewed_by' => auth()->id(),
-            'reviewed_at' => now(),
-            'note' => $request->input('note', 'Please review your course selection and submit again.'),
-        ]);
+            return back()->with('status', $student->name."'s registration was rejected. The student can revise and resubmit.");
+        });
+    }
 
-        return back()->with('status', $student->name."'s pre-registration was returned for revision.");
+    /**
+     * Keep existing form URLs working with the same mandatory rejection reason.
+     */
+    public function returnRegistrationBatch(Request $request, User $student): RedirectResponse
+    {
+        return $this->rejectRegistrationBatch($request, $student);
     }
 
     private function authorizeAdvisee(User $student): void

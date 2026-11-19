@@ -165,6 +165,9 @@ class DashboardController extends Controller
             'warnings' => $warnings,
             'registrations' => $student->preRegistrations,
             'term_registrations' => $termRequests,
+            'registration_prerequisites' => $termRequests->mapWithKeys(fn (PreRegistration $registration) => [
+                $registration->id => $this->curriculum->prerequisiteStanding($student, $registration->offering->course),
+            ]),
             'other_registrations' => $otherRequests,
             'pending_registrations' => $student->preRegistrations->where('status', 'pending')->count(),
             'submission' => $submission,

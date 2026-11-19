@@ -6,6 +6,7 @@ use App\Models\Offering;
 use App\Models\PreRegistration;
 use App\Models\Program;
 use App\Models\Setting;
+use App\Models\StudyPlanEntry;
 use App\Models\User;
 use App\Support\RegistrationSchedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -84,12 +85,79 @@ test('pre-registration mirrors the study plan and only enables offered courses',
         ->assertSee('Semester 1')
         ->assertSee('Semester 2');
 
-    expect(substr_count($html, 'btn-primary btn-sm'))->toBe(1)
-        ->and($html)->toContain('Locked — complete prerequisite(s): '.$odd->code)
+    expect(substr_count($html, 'btn-primary btn-sm'))->toBe(2)
+        ->and($html)->toContain('Prerequisite warning — not yet fulfilled')
         ->and(substr_count($html, '>Not offered<'))->toBe(1)
-        // Only the offered, prerequisite-clear course carries an Add form.
+        // Both offered courses can be added; prerequisite standing is a warning.
         ->and(substr_count($html, route('student.pre-registration.store', Offering::where('course_id', $odd->id)->first())))->toBe(1)
-        ->and(substr_count($html, route('student.pre-registration.store', Offering::where('course_id', $locked->id)->first())))->toBe(0);
+        ->and(substr_count($html, route('student.pre-registration.store', Offering::where('course_id', $locked->id)->first())))->toBe(1);
+});
+
+test('students can register despite unmet prerequisites and both student and advisor see the warning', function () {
+    [$student, , $prerequisite, , $course] = makePreRegStudent();
+    $advisor = User::factory()->create(['role' => 'advisor', 'is_hod' => true]);
+    $student->update(['advisor_id' => $advisor->id]);
+    Setting::put('active_session', '20262027');
+    Setting::put('active_semester', '2');
+    $offering = offerInActiveTerm($course);
+
+    $this->actingAs($student)->get(route('student.pre-registration'))->assertOk();
+    $this->post(route('student.pre-registration.store', $offering))
+        ->assertRedirect()->assertSessionHasNoErrors();
+
+    $this->assertDatabaseHas('pre_registrations', [
+        'user_id' => $student->id, 'offering_id' => $offering->id, 'status' => 'pending',
+    ]);
+    $this->get(route('student.pre-registration'))->assertOk()
+        ->assertSee('Prerequisite warning — not yet fulfilled')->assertSee($prerequisite->code.' · Planned');
+    $this->post(route('student.pre-registration.submit'))->assertRedirect()->assertSessionHasNoErrors();
+    $this->actingAs($advisor)->get(route('advisor.dashboard.detail', ['student' => $student->id]))
+        ->assertOk()->assertSee('Prerequisite warning — not yet fulfilled')
+        ->assertSee($prerequisite->code.' · Planned');
+    $this->get(route('advisor.offering.manage'))->assertOk()
+        ->assertSee('Prerequisite warning — not yet fulfilled')->assertSee($prerequisite->code.' · Planned');
+});
+
+test('fulfilled prerequisites show the completed or exempted status', function (string $status) {
+    [$student, , $prerequisite, , $course] = makePreRegStudent();
+    Setting::put('active_session', '20262027');
+    Setting::put('active_semester', '2');
+    offerInActiveTerm($course);
+    $this->actingAs($student)->get(route('student.pre-registration'))->assertOk();
+    StudyPlanEntry::where('user_id', $student->id)->where('course_id', $prerequisite->id)->update(['status' => $status]);
+
+    $this->actingAs($student->fresh())->get(route('student.pre-registration'))->assertOk()
+        ->assertSee('Prerequisites fulfilled')
+        ->assertSee($prerequisite->code.' · '.ucfirst(strtolower($status)))
+        ->assertDontSee('Prerequisite warning — not yet fulfilled');
+})->with(['COMPLETED', 'EXEMPTED']);
+
+test('prerequisite warnings do not bypass the credit cap', function () {
+    [$student, , $other, , $course] = makePreRegStudent();
+    Setting::put('active_session', '20262027');
+    Setting::put('active_semester', '2');
+    $existing = offerInActiveTerm($other);
+    $offering = offerInActiveTerm($course);
+    PreRegistration::create([
+        'user_id' => $student->id, 'offering_id' => $existing->id, 'session' => '20262027',
+        'semester' => '2', 'credits' => 19, 'status' => 'pending',
+    ]);
+
+    $this->actingAs($student)->post(route('student.pre-registration.store', $offering))
+        ->assertSessionHasErrors('offering');
+
+    $this->assertDatabaseCount('pre_registrations', 1);
+    $this->assertDatabaseMissing('pre_registrations', ['offering_id' => $offering->id]);
+});
+
+test('student dashboard and navigation hide study plan entry points', function () {
+    [$student] = makePreRegStudent();
+
+    $this->actingAs($student)->get(route('student.dashboard'))->assertOk()
+        ->assertDontSee(route('student.study-plan'), false)
+        ->assertDontSee('Study Plan Status');
+    $this->get(route('student.pre-registration'))->assertOk()
+        ->assertDontSee(route('student.study-plan'), false);
 });
 
 test('an offered course can be added while a course that is not offered is refused', function () {

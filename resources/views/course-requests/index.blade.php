@@ -19,7 +19,7 @@
         Only advisor-forwarded requests reach the Head of Department. Final approval makes the course offered
         and automatically registers the requesting student with approved status for that term.
         The registration appears in Manage Offering, the student's registration list and registration slip.
-        Prerequisites and credit limits still apply.
+        Prerequisites are highlighted for review, but do not block registration. The 20-credit limit still applies.
     </div>
 
     @if ($requestsClosed)
@@ -99,10 +99,11 @@
                 @if ($record->status === 'approved' && ! $isRegistered)
                     <p class="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
                         Approval is recorded, but this course has no approved registration yet.
-                        Contact the academic advisor to resolve any prerequisite or credit-limit issues.
+                        Contact the academic advisor to resolve any registration or credit-limit issues.
                     </p>
                 @endif
 
+                <x-prerequisite-indicator :prerequisites="$requestPrerequisites[$record->id]" />
                 <div class="mt-4 rounded-xl bg-slate-50 p-3">
                     <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Student's reason</p>
                     <p class="mt-1 whitespace-pre-line break-words text-sm text-slate-700">{{ $record->reason }}</p>

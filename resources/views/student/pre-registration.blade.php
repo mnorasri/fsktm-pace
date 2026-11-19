@@ -3,8 +3,11 @@
 @section('title', 'Pre-Registration')
 
 @section('content')
+    @php
+        $registrationRejected = in_array($submission?->status, ['returned', 'rejected'], true);
+    @endphp
     <x-page-header title="Course Pre-Registration"
-        subtitle="{{ $activeSession }} · Semester {{ $activeSemester }} — your study plan, with only the courses offered this term enabled">
+        subtitle="{{ $activeSession }} · Semester {{ $activeSemester }} — register offered courses and review prerequisite indicators">
         <x-slot:actions>
             <a href="{{ route('student.course-requests.index') }}" class="btn-ghost">
                 <x-icon name="plus" class="size-4" /> Request an unoffered course
@@ -73,14 +76,14 @@
             </div>
         @else
             <div class="mb-5 flex flex-wrap items-start gap-3 rounded-3xl border p-5
-                {{ $submission?->status === 'returned' ? 'border-rose-200 bg-rose-50' : 'border-brand-200 bg-brand-50' }}">
+                {{ $registrationRejected ? 'border-rose-200 bg-rose-50' : 'border-brand-200 bg-brand-50' }}">
                 <span class="grid size-9 shrink-0 place-items-center rounded-2xl
-                    {{ $submission?->status === 'returned' ? 'bg-rose-100 text-rose-600' : 'bg-brand-100 text-brand-600' }}">
-                    <x-icon :name="$submission?->status === 'returned' ? 'warning' : 'clipboard'" class="size-5" />
+                    {{ $registrationRejected ? 'bg-rose-100 text-rose-600' : 'bg-brand-100 text-brand-600' }}">
+                    <x-icon :name="$registrationRejected ? 'warning' : 'clipboard'" class="size-5" />
                 </span>
                 <div class="min-w-[16rem] flex-1">
-                    @if ($submission?->status === 'returned')
-                        <p class="text-sm font-bold text-rose-900">Returned by your advisor — please revise and resubmit</p>
+                    @if ($registrationRejected)
+                        <p class="text-sm font-bold text-rose-900">Rejected by your advisor — please revise and resubmit</p>
                         <p class="mt-1 text-sm text-rose-800">
                             &ldquo;{{ $submission->note }}&rdquo;
                             @if ($submission->reviewed_at) · {{ $submission->reviewed_at->format('d M Y, H:i') }} @endif
@@ -115,13 +118,13 @@
     <div class="mt-5 flex flex-wrap items-center gap-4 text-xs text-slate-500">
         <span class="flex items-center gap-1.5"><span class="size-2.5 rounded-full bg-brand-500"></span> Offered — can be added</span>
         <span class="flex items-center gap-1.5"><span class="size-2.5 rounded-full bg-emerald-500"></span> Selected</span>
-        <span class="flex items-center gap-1.5"><span class="size-2.5 rounded-full bg-rose-500"></span> Locked — prerequisite missing</span>
+        <span class="flex items-center gap-1.5"><span class="size-2.5 rounded-full bg-amber-500"></span> Prerequisite warning — registration allowed</span>
         <span class="flex items-center gap-1.5"><span class="size-2.5 rounded-full bg-amber-400"></span> Awaiting approval — plan or advisor</span>
         <span class="flex items-center gap-1.5"><span class="size-2.5 rounded-full bg-slate-300"></span> Not offered this term</span>
     </div>
 
     <div class="mt-4">
-        <input type="search" data-filter-input="#offering-list" placeholder="Search your study plan…" class="input">
+        <input type="search" data-filter-input="#offering-list" placeholder="Search courses…" class="input">
     </div>
 
     {{-- Study plan grid — one row per year: odd semester, (special semester), even semester --}}
@@ -192,6 +195,7 @@
                                                         @if ($offering->venue) · {{ $offering->venue }} @endif
                                                     @endif
                                                 </p>
+                                                <x-prerequisite-indicator :prerequisites="$row['prerequisites']" />
                                                 @if ($row['reason'])
                                                     <p class="mt-1 inline-flex items-center gap-1 text-xs font-semibold {{ $offering === null ? 'text-slate-400' : ($row['awaitingPlan'] ? 'text-amber-700' : 'text-rose-600') }}">
                                                         <x-icon :name="$offering === null ? 'calendar' : ($row['awaitingPlan'] ? 'lock' : 'warning')" class="size-3.5" />
@@ -252,12 +256,12 @@
                 @if ($submission)
                     <x-badge :tone="match ($submission->status) {
                         'approved' => 'emerald',
-                        'returned' => 'rose',
+                        'returned', 'rejected' => 'rose',
                         default => 'amber',
                     }" dot>
                         {{ match ($submission->status) {
                             'approved' => 'Approved by advisor',
-                            'returned' => 'Returned by advisor',
+                            'returned', 'rejected' => 'Rejected by advisor',
                             default => 'Awaiting advisor approval',
                         } }}
                     </x-badge>
@@ -296,6 +300,10 @@
                         </div>
                         <x-badge :tone="$tone">{{ ucfirst($registration->status) }}</x-badge>
                     </div>
+                    <x-prerequisite-indicator :prerequisites="$registrationPrerequisites[$registration->id]" />
+                    @if ($registration->status === 'rejected' && $registration->note)
+                        <p class="mt-2 text-xs text-rose-700"><span class="font-semibold">Reason for rejection:</span> {{ $registration->note }}</p>
+                    @endif
                     <div class="mt-2 flex items-center justify-between">
                         <span class="text-xs font-semibold text-slate-500">{{ $registration->credits }} credits</span>
                         @if ($registration->status === 'pending' && ! $registrationLocked && $windowOpen)

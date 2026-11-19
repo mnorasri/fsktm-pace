@@ -15,23 +15,15 @@ class CurriculumService
     public const MAX_CREDITS_PER_TERM = 20;
 
     /**
-     * Cached per-student entry maps, so laying out a plan does not re-query
-     * for every prerequisite check on the page.
-     *
-     * @var array<int, Collection<string, StudyPlanEntry>>
-     */
-    private array $entryMaps = [];
-
-    /**
      * Every study-plan entry for a student keyed by course code.
      *
      * @return Collection<string, StudyPlanEntry>
      */
     public function entryMap(User $student): Collection
     {
-        return $this->entryMaps[$student->id] ??= $student->studyPlanEntries()
-            ->with('course')
-            ->get()
+        $student->loadMissing('studyPlanEntries.course');
+
+        return $student->studyPlanEntries
             ->filter(fn (StudyPlanEntry $entry) => $entry->course !== null)
             ->keyBy(fn (StudyPlanEntry $entry) => $entry->course->code);
     }
@@ -95,31 +87,39 @@ class CurriculumService
     }
 
     /**
-     * Strict prerequisite gate used for pre-registration: every prerequisite
-     * must already be COMPLETED or EXEMPTED.
+     * Prerequisite standing is informational during registration.
      *
      * @return array{ok:bool, missing:array<int,string>}
      */
     public function prerequisitesSatisfied(User $student, Course $course): array
     {
-        $codes = $course->prerequisiteCodes();
+        $missing = array_column(array_filter(
+            $this->prerequisiteStanding($student, $course),
+            fn (array $prerequisite) => ! $prerequisite['met'],
+        ), 'code');
 
-        if (empty($codes)) {
-            return ['ok' => true, 'missing' => []];
+        return ['ok' => empty($missing), 'missing' => $missing];
+    }
+
+    /** @return list<array{code: string, status: string, met: bool}> */
+    public function prerequisiteStanding(User $student, Course $course): array
+    {
+        $codes = $course->prerequisiteCodes();
+        if ($codes === []) {
+            return [];
         }
 
         $entries = $this->entryMap($student);
-        $missing = [];
 
-        foreach ($codes as $code) {
-            $entry = $entries->get($code);
+        return array_map(function (string $code) use ($entries): array {
+            $status = $entries->get($code)?->status ?? 'NOT_COMPLETED';
 
-            if (! $entry || ! in_array($entry->status, ['COMPLETED', 'EXEMPTED'], true)) {
-                $missing[] = $code;
-            }
-        }
-
-        return ['ok' => empty($missing), 'missing' => $missing];
+            return [
+                'code' => $code,
+                'status' => $status,
+                'met' => in_array($status, ['COMPLETED', 'EXEMPTED'], true),
+            ];
+        }, $codes);
     }
 
     /**

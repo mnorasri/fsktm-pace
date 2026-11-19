@@ -143,7 +143,7 @@ test('the advisor approves the whole pre-registration and every course is confir
         ->assertSessionHasErrors('offering');
 });
 
-test('returning the batch unlocks it, keeps the note, and allows a resubmission', function () {
+test('rejecting the batch unlocks it, keeps the reason, and allows a resubmission', function () {
     [$student, $advisor, $first, $second] = makeBatchStudent();
 
     $offeringA = offerBatchCourse($first);
@@ -153,15 +153,15 @@ test('returning the batch unlocks it, keeps the note, and allows a resubmission'
     $this->actingAs($student)->post(route('student.pre-registration.submit'))->assertSessionHasNoErrors();
 
     $this->actingAs($advisor)
-        ->post(route('advisor.registrations.batch.return', $student), ['note' => 'Please add the lab course.'])
+        ->post(route('advisor.registrations.batch.reject', $student), ['note' => 'Please add the lab course.'])
         ->assertSessionHasNoErrors();
 
-    expect(RegistrationSubmission::where('user_id', $student->id)->value('status'))->toBe('returned');
+    expect(RegistrationSubmission::where('user_id', $student->id)->value('status'))->toBe('rejected');
 
     $this->actingAs($student)
         ->get(route('student.pre-registration'))
         ->assertOk()
-        ->assertSee('Returned by your advisor')
+        ->assertSee('Rejected by your advisor')
         ->assertSee('Please add the lab course.');
 
     // The student may edit again …
@@ -214,6 +214,8 @@ test('an unrelated advisor cannot decide the batch', function () {
     $this->actingAs($stranger)
         ->post(route('advisor.registrations.batch.return', $student))
         ->assertForbidden();
+    $this->post(route('advisor.registrations.batch.reject', $student), ['note' => 'Not my supervisee.'])
+        ->assertForbidden();
 
     // A student with nothing submitted cannot be decided either.
     $other = User::factory()->create([
@@ -238,7 +240,7 @@ test('the advisor dashboard shows the batch awaiting their decision', function (
     $registration = PreRegistration::where('user_id', $student->id)->first();
 
     // Not submitted yet → the panel says so, shows the slip-style table, and
-    // still offers the per-course decision.
+    // still offers course approval, but no individual course rejection.
     $this->actingAs($advisor)
         ->get(route('advisor.dashboard'))
         ->assertOk()
@@ -249,7 +251,8 @@ test('the advisor dashboard shows the batch awaiting their decision', function (
         ->assertSee('Maximum load per term:')
         ->assertSee($first->code)
         ->assertSee(route('advisor.registrations.approve', $registration), false)
-        ->assertSee(route('advisor.registrations.reject', $registration), false)
+        ->assertDontSee('Reject course')
+        ->assertDontSee('/advisor/registrations/'.$registration->id.'/reject', false)
         ->assertDontSee('Approve registration');
 
     $this->actingAs($student)->post(route('student.pre-registration.submit'))->assertSessionHasNoErrors();
@@ -261,10 +264,76 @@ test('the advisor dashboard shows the batch awaiting their decision', function (
         ->assertSee('Approve registration')
         ->assertSee('Approve the whole registration')
         ->assertSee(route('advisor.registrations.batch.approve', $student), false)
-        ->assertSee(route('advisor.registrations.batch.return', $student), false)
+        ->assertSee(route('advisor.registrations.batch.reject', $student), false)
+        ->assertSee('Reject registration')
+        ->assertSee('Reason for rejecting')
+        ->assertDontSee('Reason (optional)')
         // The per-course buttons step aside for the batch decision.
         ->assertDontSee(route('advisor.registrations.approve', $registration), false)
-        ->assertDontSee(route('advisor.registrations.reject', $registration), false);
+        ->assertDontSee('Reject course');
+});
+
+test('rejecting a registration requires a nonblank reason on both current and legacy endpoints', function (string $endpoint, ?string $reason) {
+    [$student, $advisor, $course] = makeBatchStudent();
+    $offering = offerBatchCourse($course);
+    $this->actingAs($student)->post(route('student.pre-registration.store', $offering))->assertSessionHasNoErrors();
+    $this->post(route('student.pre-registration.submit'))->assertSessionHasNoErrors();
+
+    $this->actingAs($advisor)->post(route($endpoint, $student), ['note' => $reason])
+        ->assertSessionHasErrors(['note' => 'Please provide a reason for rejecting the registration.']);
+
+    $this->assertDatabaseHas('registration_submissions', [
+        'user_id' => $student->id, 'status' => 'submitted', 'reviewed_by' => null, 'note' => null,
+    ]);
+    $this->assertDatabaseHas('pre_registrations', ['user_id' => $student->id, 'status' => 'pending']);
+})->with([
+    ['advisor.registrations.batch.reject', null],
+    ['advisor.registrations.batch.reject', '   '],
+    ['advisor.registrations.batch.return', null],
+    ['advisor.registrations.batch.return', '   '],
+]);
+
+test('an advisor cannot reject an individual course even with a reason', function (?string $reason) {
+    [$student, $advisor, $course] = makeBatchStudent();
+    $offering = offerBatchCourse($course);
+    $registration = PreRegistration::create([
+        'user_id' => $student->id, 'offering_id' => $offering->id,
+        'session' => '20262027', 'semester' => '2', 'status' => 'pending', 'credits' => 3,
+    ]);
+
+    $this->actingAs($advisor)->post('/advisor/registrations/'.$registration->id.'/reject', ['note' => $reason])
+        ->assertNotFound();
+
+    expect($registration->refresh()->status)->toBe('pending');
+    expect($registration->note)->toBeNull();
+    expect($registration->reviewed_by)->toBeNull();
+})->with([null, 'Choose the correct course.']);
+
+test('rejecting a submission preserves confirmed courses and lets the student revise pending courses', function () {
+    [$student, $advisor, $first, $second] = makeBatchStudent();
+    $firstOffering = offerBatchCourse($first);
+    $secondOffering = offerBatchCourse($second);
+    $this->actingAs($student)->post(route('student.pre-registration.store', $firstOffering))->assertSessionHasNoErrors();
+    $this->post(route('student.pre-registration.store', $secondOffering))->assertSessionHasNoErrors();
+    PreRegistration::where('offering_id', $firstOffering->id)->update(['status' => 'approved']);
+    $this->post(route('student.pre-registration.submit'))->assertSessionHasNoErrors();
+
+    $this->actingAs($advisor)->post(route('advisor.registrations.batch.reject', $student), [
+        'note' => 'Please revise the second course.',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    $this->assertDatabaseHas('pre_registrations', [
+        'user_id' => $student->id, 'offering_id' => $firstOffering->id, 'status' => 'approved',
+    ]);
+    $this->assertDatabaseHas('pre_registrations', [
+        'user_id' => $student->id, 'offering_id' => $secondOffering->id, 'status' => 'pending',
+    ]);
+    $this->assertDatabaseHas('registration_submissions', [
+        'user_id' => $student->id, 'status' => 'rejected', 'note' => 'Please revise the second course.',
+        'reviewed_by' => $advisor->id,
+    ]);
+    $this->actingAs($advisor)->get(route('advisor.dashboard.detail', ['student' => $student->id]))
+        ->assertOk()->assertSee('Rejected — revision required')->assertSee('Please revise the second course.');
 });
 
 test('a head of department cannot decide a student they do not advise', function () {

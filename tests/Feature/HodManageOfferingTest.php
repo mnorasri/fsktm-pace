@@ -332,7 +332,7 @@ test('the registration approvals panel lists a submitted pre-registration', func
         ->assertSee('PAK 10103')
         ->assertSee('3')
         ->assertSee('Approve registration')
-        ->assertSee('Return');
+        ->assertSee('Reject registration');
 });
 
 test('the registration approvals panel is empty when nothing is pending', function () {
@@ -405,7 +405,7 @@ test('an administrator can return a student registration from the panel', functi
         ->assertSessionHasNoErrors()
         ->assertRedirect();
 
-    expect($submission->refresh()->status)->toBe('returned')
+    expect($submission->refresh()->status)->toBe('rejected')
         ->and($submission->fresh()->note)->toBe('Please revise your course selection.');
 });
 

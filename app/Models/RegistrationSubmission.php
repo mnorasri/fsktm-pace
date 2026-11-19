@@ -17,6 +17,8 @@ class RegistrationSubmission extends Model
 
     public const STATUS_RETURNED = 'returned';
 
+    public const STATUS_REJECTED = 'rejected';
+
     protected $fillable = [
         'user_id', 'session', 'semester', 'status',
         'submitted_at', 'reviewed_by', 'reviewed_at', 'note',

@@ -142,10 +142,10 @@ Route::middleware(['auth', 'password.changed', 'role:advisor'])->prefix('advisor
     Route::post('/plans/{student}/approve', [ApprovalController::class, 'approvePlan'])->name('plans.approve');
     Route::post('/plans/{student}/reject', [ApprovalController::class, 'rejectPlan'])->name('plans.reject');
     Route::post('/registrations/{registration}/approve', [ApprovalController::class, 'approveRegistration'])->name('registrations.approve');
-    Route::post('/registrations/{registration}/reject', [ApprovalController::class, 'rejectRegistration'])->name('registrations.reject');
 
     // The whole pre-registration for the active term, approved as one batch.
     Route::post('/registrations/{student}/approve-term', [ApprovalController::class, 'approveRegistrationBatch'])->name('registrations.batch.approve');
+    Route::post('/registrations/{student}/reject-term', [ApprovalController::class, 'rejectRegistrationBatch'])->name('registrations.batch.reject');
     Route::post('/registrations/{student}/return-term', [ApprovalController::class, 'returnRegistrationBatch'])->name('registrations.batch.return');
 });
 

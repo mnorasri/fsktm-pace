@@ -79,6 +79,7 @@ class PreRegistrationController extends Controller
             $offering = $course ? $offerings->get($course->id) : null;
             $registration = $offering ? $registrations->get($offering->id) : null;
             $selected = $registration !== null;
+            $prerequisites = $course ? $this->curriculum->prerequisiteStanding($student, $course) : [];
 
             $eligible = false;
             $capBlocked = false;
@@ -98,12 +99,8 @@ class PreRegistrationController extends Controller
                 } elseif (! $planApproved) {
                     $reason = 'Awaiting approval of your study plan.';
                 } else {
-                    $prereq = $this->curriculum->prerequisitesSatisfied($student, $course);
-                    $eligible = $prereq['ok'];
-
-                    if (! $eligible) {
-                        $reason = 'Locked — complete prerequisite(s): '.implode(', ', $prereq['missing']).'.';
-                    } elseif ($committed - ($requestedCourseIds->has($course->id) ? $course->credits : 0) + $course->credits > $cap) {
+                    $eligible = true;
+                    if ($committed - ($requestedCourseIds->has($course->id) ? $course->credits : 0) + $course->credits > $cap) {
                         $capBlocked = true;
                         $reason = 'Credit cap reached — remove a course before adding '.$course->code.'.';
                     }
@@ -115,6 +112,7 @@ class PreRegistrationController extends Controller
                 'offering' => $offering,
                 'registration' => $registration,
                 'selected' => $selected,
+                'prerequisites' => $prerequisites,
                 'capBlocked' => $capBlocked,
                 'awaitingPlan' => $offering !== null && ! $selected && ! $planApproved && ! $registrationLocked,
                 'addable' => $windowOpen && ! $registrationLocked && $planApproved && $offering !== null && ! $selected && $eligible && ! $capBlocked,
@@ -129,6 +127,9 @@ class PreRegistrationController extends Controller
             'semesterLabels' => StudyPlanService::SEMESTER_LABELS,
             'rows' => $rows,
             'registrations' => $registrations,
+            'registrationPrerequisites' => $registrations->mapWithKeys(fn (PreRegistration $registration) => [
+                $registration->id => $this->curriculum->prerequisiteStanding($student, $registration->offering->course),
+            ]),
             'offeredCount' => $offerings->count(),
             'offeredInPlan' => collect($rows)->filter(fn (array $row) => $row['offering'] !== null)->count(),
             'committedCredits' => $committed,
@@ -177,14 +178,6 @@ class PreRegistrationController extends Controller
 
             if ($existing && in_array($existing->status, ['pending', 'approved'], true)) {
                 return back()->withErrors(['offering' => 'You have already pre-registered for '.$offering->course->code.'.']);
-            }
-
-            $prereq = $this->curriculum->prerequisitesSatisfied($student, $offering->course);
-
-            if (! $prereq['ok']) {
-                return back()->withErrors([
-                    'offering' => $offering->course->code.' is locked. Complete the prerequisite(s): '.implode(', ', $prereq['missing']).'.',
-                ]);
             }
 
             $committed = $this->curriculum->totalCommittedCredits($student, $session, $semester, $offering->course_id);

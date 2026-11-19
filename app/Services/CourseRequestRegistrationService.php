@@ -46,13 +46,6 @@ class CourseRequestRegistrationService
                 return $registration;
             }
 
-            $prerequisites = $this->curriculum->prerequisitesSatisfied($student, $course);
-            if (! $prerequisites['ok']) {
-                throw ValidationException::withMessages([
-                    'course_request' => 'Complete prerequisite(s) before registration: '.implode(', ', $prerequisites['missing']).'.',
-                ]);
-            }
-
             $committed = $this->curriculum->totalCommittedCredits($student, $record->session, $record->semester, $course->id);
             $alreadyCounted = $registration?->status === 'pending' ? $registration->credits : 0;
             if ($committed - $alreadyCounted + $course->credits > CurriculumService::MAX_CREDITS_PER_TERM) {

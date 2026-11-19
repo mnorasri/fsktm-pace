@@ -140,7 +140,10 @@
                                         <td class="align-top! font-mono text-xs font-semibold text-slate-700">
                                             {{ $course?->code }}
                                         </td>
-                                        <td class="align-top! text-xs text-slate-600">{{ $course?->name }}</td>
+                                        <td class="align-top! text-xs text-slate-600">
+                                            {{ $course?->name }}
+                                            <x-prerequisite-indicator :prerequisites="$row['prerequisites'][$registration->id]" />
+                                        </td>
                                         <td class="align-top! text-center text-[10px] text-slate-400">
                                             {{ $registration->section ?? '—' }}
                                         </td>
@@ -163,27 +166,7 @@
                         </table>
                     </div>
 
-                    <div class="flex flex-wrap items-center gap-2">
-                        <form method="POST" action="{{ route('advisor.registrations.batch.approve', $student) }}" data-scroll-keep>
-                            @csrf
-                            <button class="btn-success btn-sm">
-                                <x-icon name="check" class="size-3.5" /> Approve registration
-                            </button>
-                        </form>
-                        <form method="POST" action="{{ route('advisor.registrations.batch.return', $student) }}"
-                            class="flex min-w-[16rem] flex-1 items-center gap-2" data-scroll-keep>
-                            @csrf
-                            <input type="text" name="note" placeholder="Reason (optional)" class="input flex-1">
-                            <button class="btn-ghost btn-sm">
-                                <x-icon name="arrow-path" class="size-3.5" /> Return
-                            </button>
-                        </form>
-                    </div>
-
-                    <p class="mt-2.5 text-[10px] text-slate-400">
-                        Approving confirms every pending course request above at once. Returning sends the
-                        whole registration back to {{ $student->name }} for revision.
-                    </p>
+                    <x-registration-decision :student="$student" :courses="$row['termCourses']" :credits="$row['termCredits']" />
                 </div>
 
             @endforeach

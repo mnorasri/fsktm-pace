@@ -443,11 +443,20 @@ test('HoD approval upgrades an existing pending registration without double coun
     expect($submission->refresh()->status)->toBe('submitted');
 });
 
-test('automatic registration still enforces prerequisites and the credit cap atomically', function (string $condition) {
+test('automatic registration warns about prerequisites but still enforces the credit cap atomically', function (string $condition) {
     [$student, , $hod, $course] = courseRequestFixture();
     $record = pendingCourseRequest($student, $course, true);
     if ($condition === 'prerequisite') {
         $course->update(['prerequisites' => 'PRE101']);
+        $this->actingAs($hod)->get(route('advisor.course-requests.hod.index'))->assertOk()
+            ->assertSee('Prerequisite warning — not yet fulfilled')->assertSee('PRE101 · Not completed');
+        $this->post(route('advisor.course-requests.hod.review', $record), ['decision' => 'approve'])
+            ->assertRedirect()->assertSessionHasNoErrors();
+
+        expect($record->refresh()->status)->toBe('approved');
+        $this->assertDatabaseHas('pre_registrations', ['user_id' => $student->id, 'status' => 'approved']);
+
+        return;
     } else {
         $other = Course::create(['code' => 'OTHER18', 'name' => 'Other course', 'credits' => 18]);
         $offering = Offering::create(['course_id' => $other->id, 'session' => '2026/2027', 'semester' => '1']);

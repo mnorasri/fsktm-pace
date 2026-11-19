@@ -7,9 +7,6 @@
         subtitle="{{ $student->program?->name }} · {{ $student->plan?->name }}">
         <x-slot:actions>
             <x-badge tone="brand" dot>{{ $activeSession }} · Semester {{ $activeSemester }}</x-badge>
-            <a href="{{ route('student.study-plan') }}" class="btn-ghost">
-                <x-icon name="calendar" class="size-4" /> Study Plan
-            </a>
             <a href="{{ route('student.pre-registration') }}" class="btn-primary">
                 <x-icon name="plus" class="size-4" /> Pre-Register
             </a>
@@ -20,7 +17,7 @@
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <x-stat-card label="Required Credits" :value="$credits['required']" icon="academic-cap" tone="brand" hint="Curriculum total" />
         <x-stat-card label="Earned Credits" :value="$credits['earned']" icon="check" tone="emerald" hint="{{ $credits['percent'] }}% of programme" />
-        <x-stat-card label="Planned Credits" :value="$credits['planned']" icon="calendar" tone="sky" hint="In your study plan" />
+        <x-stat-card label="Planned Credits" :value="$credits['planned']" icon="calendar" tone="sky" hint="Assigned curriculum" />
         <x-stat-card label="Remaining Credits" :value="$credits['remaining']" icon="chart" tone="amber" hint="To graduate" />
     </div>
 
@@ -58,10 +55,10 @@
                 </div>
             </x-card>
 
-            <x-card title="Next Planned Semester" subtitle="The next term you have planned courses for">
+            <x-card title="Upcoming Courses" subtitle="Courses from your assigned curriculum">
                 @if ($upcoming->isEmpty())
                     <x-empty-state title="No planned courses" icon="calendar"
-                        message="Add courses to your study plan to see your upcoming semester here." />
+                        message="Your academic advisor can help review your assigned courses." />
                 @else
                     <ul class="divide-y divide-slate-100">
                         @foreach ($upcoming as $entry)
@@ -82,44 +79,6 @@
 
         {{-- Right column --}}
         <div class="space-y-6">
-            {{-- Study plan approval status --}}
-            <x-card title="Study Plan Status">
-                @php
-                    $tone = match ($student->plan_status) {
-                        'approved' => 'emerald',
-                        'submitted' => 'amber',
-                        'rejected' => 'rose',
-                        default => 'slate',
-                    };
-                    $label = ucfirst($student->plan_status);
-                @endphp
-                <div class="flex items-center justify-between">
-                    <x-badge :tone="$tone" dot>{{ $label }}</x-badge>
-                    @if ($student->plan_submitted_at)
-                        <span class="text-xs text-slate-400">Submitted {{ $student->plan_submitted_at->diffForHumans() }}</span>
-                    @endif
-                </div>
-
-                @if ($student->plan_review_note)
-                    <p class="mt-3 rounded-2xl bg-slate-50 px-3.5 py-3 text-sm text-slate-600">
-                        <span class="font-semibold">Advisor note:</span> {{ $student->plan_review_note }}
-                    </p>
-                @endif
-
-                @if (in_array($student->plan_status, ['draft', 'rejected']))
-                    <form method="POST" action="{{ route('student.study-plan.submit') }}" class="mt-4">
-                        @csrf
-                        <button class="btn-primary w-full">
-                            <x-icon name="upload" class="size-4" /> Submit for approval
-                        </button>
-                    </form>
-                @elseif ($student->plan_status === 'submitted')
-                    <p class="mt-4 rounded-2xl bg-amber-50 px-3.5 py-3 text-xs font-medium text-amber-700">
-                        Awaiting your advisor's review.
-                    </p>
-                @endif
-            </x-card>
-
             {{-- Active term registration --}}
             <x-card title="Active Term" subtitle="Pre-registration for {{ $activeSession }}">
                 <div class="mb-4 flex items-baseline justify-between">
@@ -147,8 +106,8 @@
                                 <x-badge tone="emerald" dot>Approved</x-badge>
                             @elseif ($submission?->status === 'submitted')
                                 <x-badge tone="amber" dot>Awaiting advisor</x-badge>
-                            @elseif ($submission?->status === 'returned')
-                                <x-badge tone="rose" dot>Returned</x-badge>
+                            @elseif (in_array($submission?->status, ['returned', 'rejected'], true))
+                                <x-badge tone="rose" dot>Rejected</x-badge>
                             @elseif ($registrations->isNotEmpty())
                                 <x-badge tone="slate">Not submitted</x-badge>
                             @else
@@ -176,8 +135,8 @@
                             @endforeach
                         @endforeach
                     </ul>
-                    <a href="{{ route('student.study-plan') }}" class="mt-3 inline-block text-xs font-bold text-amber-700 underline">
-                        Review study plan
+                    <a href="{{ route('student.pre-registration') }}" class="mt-3 inline-block text-xs font-bold text-amber-700 underline">
+                        Review course prerequisites
                     </a>
                 </div>
             @endif

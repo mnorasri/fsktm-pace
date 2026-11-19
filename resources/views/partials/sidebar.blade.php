@@ -76,7 +76,6 @@
         @if ($user->isStudent())
             <p class="nav-group-label">My Studies</p>
             <x-nav-link :href="route('student.dashboard')" icon="home" :active="request()->routeIs('student.dashboard')">Dashboard</x-nav-link>
-            <x-nav-link :href="route('student.study-plan')" icon="calendar" :active="request()->routeIs('student.study-plan')">Study Plan</x-nav-link>
             <x-nav-link :href="route('student.pre-registration')" icon="book" :active="request()->routeIs('student.pre-registration')">Pre-Registration</x-nav-link>
             <x-nav-link :href="route('student.course-requests.index')" icon="clipboard" :active="request()->routeIs('student.course-requests.*')">Request a Course</x-nav-link>
             <x-nav-link :href="route('student.slip')" icon="printer" :active="request()->routeIs('student.slip')">Registration Slip</x-nav-link>

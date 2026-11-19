@@ -38,13 +38,13 @@
         @php
             $statusClasses = match ($submission?->status) {
                 'approved' => 'border-emerald-300 bg-emerald-50 text-emerald-800',
-                'returned' => 'border-rose-300 bg-rose-50 text-rose-800',
+                'returned', 'rejected' => 'border-rose-300 bg-rose-50 text-rose-800',
                 'submitted' => 'border-amber-300 bg-amber-50 text-amber-800',
                 default => 'border-slate-300 bg-slate-50 text-slate-600',
             };
             $statusText = match ($submission?->status) {
                 'approved' => 'Approved by '.($submission->reviewer?->name ?? 'the academic advisor').' on '.$submission->reviewed_at?->format('d M Y'),
-                'returned' => 'Returned by the academic advisor on '.$submission->reviewed_at?->format('d M Y').' — awaiting revision',
+                'returned', 'rejected' => 'Rejected by the academic advisor on '.$submission->reviewed_at?->format('d M Y').' — awaiting revision',
                 'submitted' => 'Submitted '.$submission->submitted_at?->format('d M Y, h:i A').' — awaiting advisor approval',
                 default => 'Not yet submitted to the academic advisor',
             };

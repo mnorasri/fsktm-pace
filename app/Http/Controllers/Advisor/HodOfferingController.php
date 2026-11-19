@@ -14,6 +14,7 @@ use App\Models\Program;
 use App\Models\RegistrationSubmission;
 use App\Models\Setting;
 use App\Models\User;
+use App\Services\CurriculumService;
 use App\Support\RegistrationSchedule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -35,7 +36,7 @@ class HodOfferingController extends Controller
      * Manage Offering — registration statistics grouped by course-code
      * prefix plus inline section / lecturer / coordinator assignment.
      */
-    public function manage(Request $request): View
+    public function manage(Request $request, CurriculumService $curriculum): View
     {
         [$session, $semester] = $this->activeTerm();
 
@@ -164,7 +165,7 @@ class HodOfferingController extends Controller
             ->where('session', $session)
             ->where('semester', $semester)
             ->where('status', RegistrationSubmission::STATUS_SUBMITTED)
-            ->with(['student' => fn ($q) => $q->with(['program', 'department'])])
+            ->with(['student' => fn ($q) => $q->with(['program', 'department', 'studyPlanEntries.course'])])
             ->orderBy('submitted_at', 'asc');
 
         if (! $advisor->isAdmin()) {
@@ -183,6 +184,9 @@ class HodOfferingController extends Controller
         ])->map(fn (array $row): array => $row + [
             'termCredits' => $row['termRequests']->sum('credits'),
             'termCourses' => $row['termRequests']->count(),
+            'prerequisites' => $row['termRequests']->mapWithKeys(fn (PreRegistration $registration) => [
+                $registration->id => $curriculum->prerequisiteStanding($row['student'], $registration->offering->course),
+            ]),
         ]);
 
         return view('advisor.hod.manage', [
