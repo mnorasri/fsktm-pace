@@ -13,6 +13,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use RuntimeException;
 use Throwable;
@@ -47,6 +49,9 @@ class CourseController extends Controller
 
         return view('curriculum.courses', [
             'courses' => $courses,
+            'prerequisiteCourses' => Course::query()
+                ->when($programIds !== null, fn ($query) => $query->whereIn('program_id', $programIds))
+                ->orderBy('course_code')->get(['course_code', 'course_name_en']),
             'courseTypes' => CourseType::orderBy('code')->get(),
             'mqfs' => MqfSc::orderBy('code')->get(),
             'vbes' => Vbe::orderBy('code')->get(),
@@ -195,6 +200,34 @@ class CourseController extends Controller
      */
     protected function validated(Request $request, ?Course $course = null): array
     {
+        if ($request->boolean('prerequisite_picker')) {
+            if (! $request->has('prerequisite_codes')) {
+                $request->merge([
+                    'prerequisite_codes' => $request->filled('pre_requisite') ? [$request->input('pre_requisite')] : [],
+                ]);
+            }
+            $programIds = $request->user()->curriculumProgramIds();
+            $allowed = Course::query()
+                ->when($programIds !== null, fn ($query) => $query->whereIn('program_id', $programIds))
+                ->pluck('course_code')->merge($course?->prerequisiteCodes() ?? [])->unique()->all();
+            $selection = $request->validate([
+                'prerequisite_codes' => ['nullable', 'array', 'max:1'],
+                'prerequisite_codes.*' => ['required', 'string', 'distinct', Rule::in($allowed)],
+            ], [
+                'prerequisite_codes.max' => 'Only one prerequisite course can be selected.',
+            ]);
+            $codes = $selection['prerequisite_codes'] ?? [];
+            foreach ($codes as $code) {
+                if (strcasecmp($code, (string) $request->input('course_code')) === 0
+                    || ($course && strcasecmp($code, $course->course_code) === 0)) {
+                    throw ValidationException::withMessages([
+                        'prerequisite_codes' => 'A course cannot be its own prerequisite.',
+                    ]);
+                }
+            }
+            $request->merge(['pre_requisite' => $codes === [] ? null : implode(', ', $codes)]);
+        }
+
         return $request->validate([
             'course_code' => ['required', 'string', 'max:30', 'unique:courses,course_code'.($course ? ','.$course->id : '')],
             'course_name_en' => ['required', 'string', 'max:180'],

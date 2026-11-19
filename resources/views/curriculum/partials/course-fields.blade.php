@@ -59,11 +59,5 @@
         @enderror
     </label>
 
-    <label class="block sm:col-span-2">
-        <span class="label">Pre-requisite</span>
-        <textarea name="pre_requisite" rows="2" class="input" placeholder="Course codes, separated by commas">{{ old('pre_requisite') }}</textarea>
-        @error('pre_requisite')
-            <span class="mt-1 block text-xs font-medium text-rose-600">{{ $message }}</span>
-        @enderror
-    </label>
+    <x-prerequisite-picker :courses="$prerequisiteCourses" class="sm:col-span-2" />
 </div>

@@ -175,14 +175,49 @@
                     const raw = key.slice(5);
                     const name = raw.charAt(0).toLowerCase() + raw.slice(1);
                     const field = form?.querySelector(`[name="${name}"]`);
+                    if (field?.matches('select[data-prerequisite-picker]')) {
+                        field.querySelectorAll('[data-legacy-prerequisite]').forEach((option) => option.remove());
+                        if (value && ![...field.options].some((option) => option.value === value)) {
+                            const option = new Option(value, value);
+                            option.dataset.legacyPrerequisite = '';
+                            field.add(option);
+                        }
+                    }
                     if (field) field.value = value ?? '';
                 });
+                form?.dispatchEvent(new CustomEvent('edit-fields-populated'));
 
                 const title = modal.querySelector('[data-modal-title]');
                 if (title && trigger.dataset.title) title.textContent = trigger.dataset.title;
 
                 openModal(trigger.dataset.edit);
             });
+        });
+
+        /* Exclude the course itself from the prerequisite dropdown. */
+        document.querySelectorAll('[data-prerequisite-picker]').forEach((picker) => {
+            const form = picker.closest('form');
+            const courseCode = form?.querySelector('[name="course_code"]');
+            let originalCode = '';
+            const sync = () => {
+                [...picker.options].forEach((option) => {
+                    const self = [originalCode, courseCode?.value.trim().toLowerCase()]
+                        .filter(Boolean).includes(option.value.toLowerCase());
+                    option.disabled = self;
+                    option.hidden = self;
+                    if (self && option.selected) picker.value = '';
+                });
+            };
+            courseCode?.addEventListener('input', sync);
+            form?.addEventListener('edit-fields-populated', () => {
+                originalCode = courseCode?.value.trim().toLowerCase() || '';
+                sync();
+            });
+            form?.addEventListener('reset', () => requestAnimationFrame(() => {
+                originalCode = '';
+                sync();
+            }));
+            sync();
         });
 
         /* ------------------------------------------------------------

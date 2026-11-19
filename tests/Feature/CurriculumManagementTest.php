@@ -217,6 +217,100 @@ test('a course can be created, updated and deleted using reference codes', funct
     $this->assertDatabaseMissing('courses', ['id' => $course->id]);
 });
 
+test('course forms share a prerequisite catalogue independent of the directory search', function () {
+    $context = curriculumContext();
+    Course::create(['course_code' => 'PRE 10103', 'course_name_en' => 'Foundation', 'credit_hours' => 3, 'program_id' => $context['program']->id]);
+
+    $this->actingAs($context['admin'])->get(route('curriculum.courses.index', ['search' => 'not-found']))
+        ->assertOk()
+        ->assertSee('Choose prerequisite courses')
+        ->assertSee('value="PRE 10103"', false)
+        ->assertSee('Foundation')
+        ->assertViewHas('prerequisiteCourses', fn ($courses) => $courses->pluck('course_code')->contains('PRE 10103'));
+});
+
+test('one prerequisite selection can be saved changed and cleared', function () {
+    $context = curriculumContext();
+    foreach (['PRE 10103', 'PRE 10203'] as $code) {
+        Course::create(['course_code' => $code, 'course_name_en' => $code, 'credit_hours' => 3]);
+    }
+    $data = ['course_code' => 'PRE 20103', 'course_name_en' => 'Advanced', 'credit_hours' => 3, 'prerequisite_picker' => '1'];
+
+    $this->actingAs($context['admin'])->post(route('curriculum.courses.store'), [
+        ...$data, 'pre_requisite' => 'PRE 10103',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+    $course = Course::where('course_code', 'PRE 20103')->firstOrFail();
+    expect($course->pre_requisite)->toBe('PRE 10103');
+
+    $this->put(route('curriculum.courses.update', $course), [
+        ...$data, 'pre_requisite' => 'PRE 10203',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+    expect($course->refresh()->pre_requisite)->toBe('PRE 10203');
+
+    $this->put(route('curriculum.courses.update', $course), [...$data, 'pre_requisite' => ''])
+        ->assertRedirect()->assertSessionHasNoErrors();
+    expect($course->refresh()->pre_requisite)->toBeNull();
+});
+
+test('multiple prerequisites cannot be saved from either course form', function () {
+    $context = curriculumContext();
+    foreach (['PRE 10103', 'PRE 10203'] as $code) {
+        Course::create(['course_code' => $code, 'course_name_en' => $code, 'credit_hours' => 3]);
+    }
+    $data = [
+        'course_code' => 'PRE 20103', 'course_name_en' => 'Advanced', 'credit_hours' => 3,
+        'prerequisite_picker' => '1', 'prerequisite_codes' => ['PRE 10103', 'PRE 10203'],
+    ];
+    $this->actingAs($context['admin'])->post(route('curriculum.courses.store'), $data)
+        ->assertSessionHasErrors(['prerequisite_codes' => 'Only one prerequisite course can be selected.']);
+    $this->assertDatabaseMissing('courses', ['course_code' => 'PRE 20103']);
+
+    $course = Course::create([
+        'course_code' => 'PRE 20103', 'course_name_en' => 'Advanced', 'credit_hours' => 3,
+        'pre_requisite' => 'PRE 10103',
+    ]);
+    $this->put(route('curriculum.courses.update', $course), $data)
+        ->assertSessionHasErrors(['prerequisite_codes' => 'Only one prerequisite course can be selected.']);
+    expect($course->refresh()->pre_requisite)->toBe('PRE 10103');
+});
+
+test('prerequisite selections reject unknown duplicate malformed and self references', function (mixed $codes, string $error) {
+    $context = curriculumContext();
+    $course = Course::create(['course_code' => 'PRE 20103', 'course_name_en' => 'Advanced', 'credit_hours' => 3]);
+
+    $this->actingAs($context['admin'])->put(route('curriculum.courses.update', $course), [
+        'course_code' => 'PRE 20103', 'course_name_en' => 'Advanced', 'credit_hours' => 3,
+        'prerequisite_picker' => '1', 'prerequisite_codes' => $codes,
+    ])->assertSessionHasErrors($error);
+    expect($course->refresh()->pre_requisite)->toBeNull();
+})->with([
+    'unknown' => [['UNKNOWN'], 'prerequisite_codes.0'],
+    'duplicate' => [['PRE 20103', 'PRE 20103'], 'prerequisite_codes.0'],
+    'malformed' => ['PRE 20103', 'prerequisite_codes'],
+    'self' => [['PRE 20103'], 'prerequisite_codes'],
+]);
+
+test('prerequisite options respect programme scope while retaining existing legacy codes', function () {
+    $context = curriculumContext();
+    $course = Course::create([
+        'course_code' => 'PRE 20103', 'course_name_en' => 'Advanced', 'credit_hours' => 3,
+        'program_id' => $context['program']->id, 'pre_requisite' => 'OLD 10103',
+    ]);
+    Course::create(['course_code' => 'OTHER 10103', 'course_name_en' => 'Outside programme', 'credit_hours' => 3]);
+    $data = ['course_code' => 'PRE 20103', 'course_name_en' => 'Advanced', 'credit_hours' => 3, 'prerequisite_picker' => '1'];
+
+    $this->actingAs($context['hop'])->get(route('curriculum.courses.index'))
+        ->assertOk()->assertDontSee('Outside programme')
+        ->assertSee('data-field-pre_requisite="OLD 10103"', false);
+    $this->put(route('curriculum.courses.update', $course), [
+        ...$data, 'prerequisite_codes' => ['OTHER 10103'],
+    ])->assertSessionHasErrors('prerequisite_codes.0');
+    $this->put(route('curriculum.courses.update', $course), [
+        ...$data, 'prerequisite_codes' => ['OLD 10103'],
+    ])->assertRedirect()->assertSessionHasNoErrors();
+    expect($course->refresh()->pre_requisite)->toBe('OLD 10103');
+});
+
 test('the course import resolves codes and skips unknown references', function () {
     curriculumContext();
     CourseType::create(['code' => 'CT01', 'name' => 'University Course']);
