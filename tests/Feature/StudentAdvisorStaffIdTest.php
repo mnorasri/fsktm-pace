@@ -31,6 +31,34 @@ test('an unknown numeric advisor reference is rejected', function () {
     expect($advisor->advisees()->count())->toBe(0);
 });
 
+test('the manage students advisor dropdown filters by staff id and combines with search', function () {
+    $admin = User::factory()->create(['role' => 'admin']);
+    $advisor = User::factory()->create(['role' => 'advisor', 'staff_id' => 'advisor-one']);
+    $otherAdvisor = User::factory()->create(['role' => 'advisor', 'staff_id' => 'advisor-two']);
+    $student = User::factory()->create(['role' => 'student', 'name' => 'Matching Student', 'advisor_id' => $advisor->staff_id]);
+    User::factory()->create(['role' => 'student', 'name' => 'Another Supervisee', 'advisor_id' => $advisor->staff_id]);
+    User::factory()->create(['role' => 'student', 'name' => 'Matching Other Advisor', 'advisor_id' => $otherAdvisor->staff_id]);
+    User::factory()->create(['role' => 'student', 'name' => 'Matching Unassigned', 'advisor_id' => null]);
+
+    $this->actingAs($admin)->get(route('admin.students.index', ['advisor_id' => $advisor->staff_id]))
+        ->assertOk()
+        ->assertSee('aria-label="Filter by advisor"', false)
+        ->assertSee('value="advisor-one" selected', false)
+        ->assertViewHas('students', fn ($students) => $students->total() === 2)
+        ->assertSee('Matching Student')
+        ->assertSee('Another Supervisee')
+        ->assertDontSee('Matching Other Advisor')
+        ->assertDontSee('Matching Unassigned');
+
+    $this->get(route('admin.students.index', ['advisor_id' => $advisor->staff_id, 'search' => 'Matching']))
+        ->assertOk()
+        ->assertViewHas('students', fn ($students) => $students->pluck('id')->all() === [$student->id]);
+
+    $this->get(route('admin.students.index'))
+        ->assertOk()
+        ->assertViewHas('students', fn ($students) => $students->total() === 4);
+});
+
 test('the student import stores the advisor staff id and the password', function () {
     $admin = User::factory()->create(['role' => 'admin']);
 

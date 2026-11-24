@@ -19,7 +19,7 @@
 
     @include('partials.import-report')
 
-    <form method="GET" class="card card-pad mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <form method="GET" class="card card-pad mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <div class="relative lg:col-span-2">
             <x-icon name="search" class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
             <input type="search" name="search" value="{{ request('search') }}" placeholder="Search name, email or matric no…" class="input pl-9">
@@ -28,6 +28,12 @@
             <option value="">All programmes</option>
             @foreach ($programs as $program)
                 <option value="{{ $program->id }}" @selected(request('program_id') == $program->id)>{{ $program->code }}</option>
+            @endforeach
+        </select>
+        <select name="advisor_id" data-auto-submit class="select" aria-label="Filter by advisor">
+            <option value="">All advisors</option>
+            @foreach ($advisors as $advisor)
+                <option value="{{ $advisor->staff_id }}" @selected(request('advisor_id') === $advisor->staff_id)>{{ $advisor->name }} ({{ $advisor->staff_id }})</option>
             @endforeach
         </select>
         <div class="flex gap-2">
