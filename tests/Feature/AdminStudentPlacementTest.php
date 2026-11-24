@@ -94,6 +94,39 @@ test('the unassigned group lists students without an advisor', function () {
         ->assertSee($noAdvisor->name);
 });
 
+test('student groups provide the full edit form and save changes back to the group', function (bool $unassigned) {
+    [$advisor, $student, , , , , , $noAdvisor] = makeAdvisorPlacementFixture();
+    $admin = User::factory()->create(['role' => 'admin']);
+    $otherAdvisor = User::factory()->create(['role' => 'advisor', 'staff_id' => 'adv2', 'name' => 'Another Advisor']);
+    $student = $unassigned ? $noAdvisor : $student;
+    $url = route('admin.students.by-advisor', [
+        'advisor' => $unassigned ? 'none' : $advisor->id,
+        'search' => 'Advisor One',
+    ]);
+
+    $this->actingAs($admin)->get($url)
+        ->assertOk()
+        ->assertSee('data-edit="edit-student"', false)
+        ->assertSee('data-action="'.route('admin.students.update', $student).'"', false)
+        ->assertSee('data-field-student_id="'.$student->student_id.'"', false)
+        ->assertSee('id="edit-student"', false)
+        ->assertSee('Save changes')
+        ->assertSee($otherAdvisor->name);
+
+    $this->from($url)->put(route('admin.students.update', $student), [
+        'student_id' => $student->student_id,
+        'name' => 'Updated Student',
+        'email' => $student->email,
+        'program_id' => $student->program_id,
+        'plan_id' => $student->plan_id,
+        'advisor_id' => $otherAdvisor->staff_id,
+        'status' => 'active',
+    ])->assertRedirect($url)->assertSessionHasNoErrors();
+
+    expect($student->refresh()->name)->toBe('Updated Student')
+        ->and($student->advisor_id)->toBe('adv2');
+})->with([false, true]);
+
 test('an administrator can change the programme and plan from the advisor view', function () {
     [$advisor, $student, , , $is, $isPlan] = makeAdvisorPlacementFixture();
 

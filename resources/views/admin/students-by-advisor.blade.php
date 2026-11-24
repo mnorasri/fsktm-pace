@@ -127,7 +127,7 @@
                             <th>Programme</th>
                             <th>Study Plan</th>
                             <th>Plan Status</th>
-                            <th class="text-right">Save</th>
+                            <th class="text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -181,6 +181,20 @@
                                     <x-badge :tone="$tone">{{ ucfirst($student->plan_status) }}</x-badge>
                                 </td>
                                 <td class="align-top text-right">
+                                    <button type="button" class="btn-ghost btn-sm"
+                                        data-edit="edit-student"
+                                        data-action="{{ route($studentRoutePrefix.'update', $student) }}"
+                                        data-title="Edit {{ $student->name }}"
+                                        data-field-name="{{ $student->name }}"
+                                        data-field-email="{{ $student->email }}"
+                                        data-field-student_id="{{ $student->student_id }}"
+                                        data-field-program_id="{{ $student->program_id }}"
+                                        data-field-plan_id="{{ $student->plan_id }}"
+                                        data-field-advisor_id="{{ $student->advisor_id }}"
+                                        data-field-phone="{{ $student->phone }}"
+                                        data-field-status="{{ $student->status }}">
+                                        <x-icon name="cog" class="size-3.5" /> Edit
+                                    </button>
                                     <button form="{{ $formId }}" class="btn-success btn-sm">
                                         <x-icon name="check" class="size-3.5" /> Save
                                     </button>
@@ -197,5 +211,21 @@
                 </table>
             </div>
         </x-card>
+
+        <x-modal id="edit-student" title="Edit student" size="lg">
+            <form method="POST" action="">
+                @csrf
+                @method('PUT')
+                @include('admin.partials.student-fields', [
+                    'plans' => $programs->flatMap->plans->sortBy('code'),
+                    'advisors' => $studentAdvisors,
+                    'showStatus' => true,
+                ])
+                <div class="mt-5 flex items-center justify-end gap-2">
+                    <button type="button" data-modal-close class="btn-ghost">Cancel</button>
+                    <button type="submit" class="btn-primary"><x-icon name="check" class="size-4" /> Save changes</button>
+                </div>
+            </form>
+        </x-modal>
     @endif
 @endsection

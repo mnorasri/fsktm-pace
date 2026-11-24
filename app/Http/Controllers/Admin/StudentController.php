@@ -107,6 +107,9 @@ class StudentController extends Controller
             'studentRoutePrefix' => $request->routeIs('advisor.students.*') ? 'advisor.students.' : 'admin.students.',
             'advisors' => $advisors,
             'selectedAdvisor' => $selectedAdvisor,
+            'studentAdvisors' => ($selectedAdvisor || $showUnassigned)
+                ? User::where('role', User::ROLE_ADVISOR)->whereNotNull('staff_id')->orderBy('name')->get()
+                : collect(),
             'showUnassigned' => $showUnassigned,
             'students' => $students,
             'search' => $search,
