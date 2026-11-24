@@ -82,6 +82,33 @@ test('an administrator can browse students by PAK advisor', function () {
         ->assertDontSee($noAdvisor->name);
 });
 
+test('student lists sort by programme code then plan code then student name', function (string $listing) {
+    [$advisor, $student, $cs, $csPlan, $is, $isPlan, $other, $noAdvisor] = makeAdvisorPlacementFixture();
+    $admin = User::factory()->create(['role' => 'admin']);
+    $laterPlan = CoursePlan::create(['program_id' => $cs->id, 'code' => 'CS999', 'name' => 'Later Plan']);
+
+    $student->update(['name' => 'Zara', 'plan_id' => $csPlan->id]);
+    $other->update(['name' => 'Aaron', 'plan_id' => $laterPlan->id]);
+    $noAdvisor->update(['name' => 'Adam', 'program_id' => $is->id, 'plan_id' => $isPlan->id, 'advisor_id' => $advisor->staff_id]);
+    $first = User::factory()->create([
+        'role' => 'student', 'name' => 'Bella', 'program_id' => $cs->id,
+        'plan_id' => $csPlan->id, 'advisor_id' => $advisor->staff_id,
+    ]);
+    if ($listing === 'unassigned') {
+        User::where('role', 'student')->update(['advisor_id' => null]);
+    }
+    $url = match ($listing) {
+        'directory' => route('admin.students.index'),
+        'advisor' => route('admin.students.by-advisor', ['advisor' => $advisor->id]),
+        'unassigned' => route('admin.students.by-advisor', ['advisor' => 'none']),
+    };
+
+    $this->actingAs($admin)->get($url)->assertOk()
+        ->assertViewHas('students', fn ($students) => $students->pluck('id')->all() === [
+            $first->id, $student->id, $other->id, $noAdvisor->id,
+        ]);
+})->with(['directory', 'advisor', 'unassigned']);
+
 test('the unassigned group lists students without an advisor', function () {
     [, , , , , , , $noAdvisor] = makeAdvisorPlacementFixture();
 

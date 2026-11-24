@@ -42,7 +42,10 @@ class StudentController extends Controller
                     ->orWhere('email', 'like', $term)
                     ->orWhere('student_id', 'like', $term));
             })
+            ->orderBy(Program::select('code')->whereColumn('programs.id', 'users.program_id'))
+            ->orderBy(CoursePlan::select('code')->whereColumn('course_plans.id', 'users.plan_id'))
             ->orderBy('name')
+            ->orderBy('id')
             ->paginate(15)
             ->withQueryString();
 
@@ -87,7 +90,10 @@ class StudentController extends Controller
                 ->where('role', User::ROLE_STUDENT)
                 ->whereNull('advisor_id')
                 ->with(['program', 'plan'])
+                ->orderBy(Program::select('code')->whereColumn('programs.id', 'users.program_id'))
+                ->orderBy(CoursePlan::select('code')->whereColumn('course_plans.id', 'users.plan_id'))
                 ->orderBy('name')
+                ->orderBy('id')
                 ->get();
         } elseif (filled($selected)) {
             $selectedAdvisor = User::query()
@@ -99,7 +105,10 @@ class StudentController extends Controller
                 ->where('role', User::ROLE_STUDENT)
                 ->where('advisor_id', $selectedAdvisor->staff_id)
                 ->with(['program', 'plan'])
+                ->orderBy(Program::select('code')->whereColumn('programs.id', 'users.program_id'))
+                ->orderBy(CoursePlan::select('code')->whereColumn('course_plans.id', 'users.plan_id'))
                 ->orderBy('name')
+                ->orderBy('id')
                 ->get();
         }
 
