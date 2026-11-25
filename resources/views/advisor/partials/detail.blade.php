@@ -21,6 +21,42 @@
     <x-empty-state title="Select a supervisee" icon="users"
         message="Choose a student from the list to review their pre-registration." />
 @else
+    <section class="card card-pad mb-4" aria-label="Selected student information">
+        <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div class="min-w-0">
+                <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400">Student information</h2>
+                <p class="mt-1 break-words text-lg font-bold text-slate-900">{{ $student->name }}</p>
+            </div>
+            <x-badge tone="brand">{{ $student->student_id ?? 'No matric number' }}</x-badge>
+        </div>
+        <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div class="min-w-0">
+                <dt class="label">Email</dt>
+                <dd class="break-words text-sm text-slate-700">{{ $student->email ?? '—' }}</dd>
+            </div>
+            <div class="min-w-0">
+                <dt class="label">Phone</dt>
+                <dd class="text-sm text-slate-700">{{ $student->phone ?: '—' }}</dd>
+            </div>
+            <div class="min-w-0">
+                <dt class="label">Department</dt>
+                <dd class="break-words text-sm text-slate-700">{{ $student->department?->name ?? 'Not assigned' }}</dd>
+            </div>
+            <div class="min-w-0">
+                <dt class="label">Programme</dt>
+                <dd class="break-words text-sm text-slate-700">
+                    {{ $student->program ? $student->program->code.' — '.$student->program->name : 'Not assigned' }}
+                </dd>
+            </div>
+            <div class="min-w-0 sm:col-span-2">
+                <dt class="label">Study plan</dt>
+                <dd class="break-words text-sm text-slate-700">
+                    {{ $student->plan ? $student->plan->code.' — '.$student->plan->name : 'Not assigned' }}
+                </dd>
+            </div>
+        </dl>
+    </section>
+
     <div class="supervisee-tabs">
         <input type="radio" name="supervisee-tab-{{ $student->id }}"
             id="supervisee-{{ $student->id }}-pre"

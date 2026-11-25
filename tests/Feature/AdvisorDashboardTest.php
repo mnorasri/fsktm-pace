@@ -90,6 +90,26 @@ test('the supervisee list keeps students beyond the 35 visible row limit availab
     }
 });
 
+test('selected student information appears above the tabs on the page and detail fragment', function (string $route) {
+    [$advisor, $student] = makeAdvisorWithAdvisee();
+    $department = Department::create(['code' => 'INFO', 'name' => 'Student Information Department']);
+    $student->update(['department_id' => $department->id, 'phone' => '0123456789']);
+    $other = User::factory()->create([
+        'role' => 'student', 'advisor_id' => $advisor->staff_id,
+        'name' => 'Different Selected Student', 'email' => 'different@example.test',
+    ]);
+
+    $this->actingAs($advisor)->get(route($route, ['student' => $student->id]))
+        ->assertOk()
+        ->assertSeeInOrder(['Student information', $student->name, $student->email, '0123456789', $department->name, 'ADV2025-LOCAL', 'class="supervisee-tabs"'], false);
+
+    $this->get(route('advisor.dashboard.detail', ['student' => $other->id]))
+        ->assertOk()
+        ->assertSeeInOrder(['Student information', $other->name, $other->email, 'Not assigned', 'class="supervisee-tabs"'], false)
+        ->assertDontSee($student->email)
+        ->assertDontSee('0123456789');
+})->with(['advisor.dashboard', 'advisor.dashboard.detail']);
+
 test('the advisor dashboard shows a supervisee plan as a per-year odd / even grid', function () {
     [$advisor, $student] = makeAdvisorWithAdvisee();
 

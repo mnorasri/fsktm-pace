@@ -97,6 +97,7 @@ class DashboardController extends Controller
     private function adviseeQuery(User $advisor, ?string $session, ?string $semester)
     {
         return $advisor->advisees()->with([
+            'department',
             'program',
             'plan.program',
             'advisor',
