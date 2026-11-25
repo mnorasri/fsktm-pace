@@ -44,7 +44,7 @@
                 @endif
             </div>
 
-            <div id="supervisee-list" class="max-h-[30rem] overflow-y-auto scroll-thin">
+            <div id="supervisee-list" data-visible-limit="35" class="overflow-y-auto scroll-thin">
                 @foreach ($planGroups as $group)
                     <div data-supervisee-group>
                         {{-- One section per study plan assigned to the supervisees. --}}
@@ -131,6 +131,22 @@
             const items = document.querySelectorAll('#supervisee-list [data-supervisee-item]');
             const empty = document.getElementById('supervisee-empty');
             const detail = document.getElementById('detail');
+            const list = document.getElementById('supervisee-list');
+            const resizeList = () => {
+                if (!list) return;
+                const visibleItems = Array.from(items).filter((item) => !item.classList.contains('hidden'));
+                const limit = Number(list.dataset.visibleLimit);
+                if (visibleItems.length <= limit) {
+                    list.style.maxHeight = '';
+                    return;
+                }
+                const lastVisible = visibleItems[limit - 1];
+                const height = lastVisible.getBoundingClientRect().bottom - list.getBoundingClientRect().top + list.scrollTop;
+                list.style.maxHeight = `${Math.ceil(height)}px`;
+            };
+            resizeList();
+            window.addEventListener('resize', resizeList);
+            document.fonts?.ready.then(resizeList);
 
             if (search && items.length) {
                 const groups = document.querySelectorAll('#supervisee-list [data-supervisee-group]');
@@ -153,6 +169,8 @@
                     });
 
                     if (empty) empty.classList.toggle('hidden', visible > 0);
+                    if (list) list.scrollTop = 0;
+                    resizeList();
                 });
             }
 

@@ -76,6 +76,20 @@ function makeAdvisorWithAdvisee(): array
     return [$advisor, $student];
 }
 
+test('the supervisee list keeps students beyond the 35 visible row limit available for scrolling', function () {
+    $advisor = User::factory()->create(['role' => 'advisor', 'staff_id' => 'scroll-advisor']);
+    $students = User::factory()->count(36)->create(['role' => 'student', 'advisor_id' => $advisor->staff_id]);
+
+    $response = $this->actingAs($advisor)->get(route('advisor.dashboard'))
+        ->assertOk()
+        ->assertSee('data-visible-limit="35"', false)
+        ->assertViewHas('students', fn ($rows) => $rows->count() === 36);
+
+    foreach ($students as $student) {
+        $response->assertSee('data-student-id="'.$student->id.'"', false);
+    }
+});
+
 test('the advisor dashboard shows a supervisee plan as a per-year odd / even grid', function () {
     [$advisor, $student] = makeAdvisorWithAdvisee();
 
